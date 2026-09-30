@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: maritime_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-maritime_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-maritime_secure_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-maritime_ops}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-maritime_user} -d ${POSTGRES_DB:-maritime_ops}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: maritime_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: maritime_backend
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-maritime_user}:${POSTGRES_PASSWORD:-maritime_secure_dev_password}@postgres:5432/${POSTGRES_DB:-maritime_ops}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: '["http://localhost:5173", "http://localhost:3000", "http://localhost:80", "http://localhost"]'
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
+      AIS_BBOX_MIN_LAT: ${AIS_BBOX_MIN_LAT:-49.5}
+      AIS_BBOX_MIN_LON: ${AIS_BBOX_MIN_LON:--2.0}
+      AIS_BBOX_MAX_LAT: ${AIS_BBOX_MAX_LAT:-51.5}
+      AIS_BBOX_MAX_LON: ${AIS_BBOX_MAX_LON:-2.5}
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ais-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: maritime_ais_worker
+    restart: unless-stopped
+    command: ["python", "app/workers/ais_worker.py"]
+    volumes:
+      - ./backend:/app
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-maritime_user}:${POSTGRES_PASSWORD:-maritime_secure_dev_password}@postgres:5432/${POSTGRES_DB:-maritime_ops}
+      REDIS_URL: redis://redis:6379/0
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
+      AIS_BBOX_MIN_LAT: ${AIS_BBOX_MIN_LAT:-49.5}
+      AIS_BBOX_MIN_LON: ${AIS_BBOX_MIN_LON:--2.0}
+      AIS_BBOX_MAX_LAT: ${AIS_BBOX_MAX_LAT:-51.5}
+      AIS_BBOX_MAX_LON: ${AIS_BBOX_MAX_LON:-2.5}
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: maritime_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

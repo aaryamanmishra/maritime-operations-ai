@@ -1,0 +1,6 @@
+path: /Users/aaryamanmishra/Documents/maritime-operations-ai/data/processed/opensar_filtered
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: vessel

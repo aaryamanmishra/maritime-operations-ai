@@ -1,0 +1,46 @@
+{
+  "model_name": "YOLO26s-SAR-Vessel",
+  "model_version": "yolo26s-opensar-v1",
+  "architecture": "YOLO26s (Ultralytics / OpenSAR Insight)",
+  "task": "detect",
+  "status": "TRAINED / OPERATIONAL",
+  "certification": "UNQUALIFIED_ESTIMATE",
+  "operational_declaration": "TRAINED / OPERATIONAL (Not certified or production-validated)",
+  "classes": {
+    "0": "vessel"
+  },
+  "dataset": {
+    "name": "OpenSAR Insight Sentinel-1 GRD filtered dataset",
+    "modality": "Sentinel-1 GRD VV/VH",
+    "resolution": "512x512 SAR patches tiled to 640x640",
+    "splits": {
+      "train": 203,
+      "val": 13,
+      "test": 100
+    },
+    "license": "Composite (MIT OpenSARInsight / AGPL-3.0 Ultralytics / Copernicus Open Access)"
+  },
+  "training": {
+    "platform": "Kaggle NVIDIA Tesla T4",
+    "device": "cuda:0",
+    "mixed_precision": true,
+    "epochs_completed": 87,
+    "best_epoch": 62,
+    "batch_size": 16,
+    "imgsz": 640,
+    "early_stopping_patience": 25,
+    "optimizer": "auto",
+    "learning_rate": 0.001
+  },
+  "evaluation_held_out_test": {
+    "precision": 0.4044,
+    "recall": 0.3152,
+    "mAP50": 0.2335,
+    "mAP50_95": 0.0471,
+    "model_size_mb": 20.6,
+    "cpu_inference_latency_ms": 57.10,
+    "notes": "Evaluated strictly on held-out OpenSAR test split (100 images, 257 vessels)."
+  },
+  "limitations": "Metrics reflect performance on the OpenSAR Insight held-out test split under standard high-contrast Sentinel-1 GRD processing. Generalization gap is expected in high-clutter sea states or variable incidence angles. Detections must be interpreted as probabilistic operational estimates, not navigational ground truth.",
+  "timestamp": "2026-09-30T10:45:00Z"
+}

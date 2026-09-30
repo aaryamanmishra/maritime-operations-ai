@@ -1,0 +1,117 @@
+{
+  "model_architecture": "TemporalFusionTransformer",
+  "model_version": "1.0.0",
+  "created_at": "2026-09-30T08:28:43.882649+00:00",
+  "git_commit": "uncommitted",
+  "dataset_name": "MARIS-Forecast NOAA Track A",
+  "dataset_doi": "10.5281/zenodo.21224009",
+  "upstream_repository": "https://github.com/mark000071/MARIS-Forecast",
+  "licensing": {
+    "dataset_release": "CC-BY-4.0",
+    "ais_data": "U.S. Public Domain (NOAA MarineCadastre)",
+    "osm_data": "Open Database License (ODbL)",
+    "weather_data": "Attribution required (Copernicus / Open-Meteo)"
+  },
+  "feature_schema": {
+    "historical_features": [
+      "hist_sog_kn",
+      "hist_cog_sin",
+      "hist_cog_cos",
+      "hist_heading_sin",
+      "hist_heading_cos",
+      "hist_step_displacement_m"
+    ],
+    "vessel_static_features": [
+      "design_speed_kn",
+      "displacement_m",
+      "core_eligible",
+      "full_eligible"
+    ],
+    "environmental_features": [
+      "wind_speed_mps",
+      "wind_dir_sin",
+      "wind_dir_cos",
+      "wind_rel_heading_sin",
+      "wind_rel_heading_cos",
+      "sea_wave_height_m",
+      "sea_wave_dir_sin",
+      "sea_wave_dir_cos",
+      "sea_wave_period_s",
+      "sea_swell_wave_height_m"
+    ]
+  },
+  "normalization_statistics": {
+    "hist": {
+      "mean": [
+        11.424715042114258,
+        0.033145952969789505,
+        0.04509803652763367,
+        0.02468816749751568,
+        0.040628582239151,
+        1.139815092086792
+      ],
+      "std": [
+        4.6290602684021,
+        0.7065539956092834,
+        0.705437421798706,
+        0.6994321346282959,
+        0.7131995558738708,
+        0.5164937973022461
+      ]
+    },
+    "vessel": {
+      "mean": [
+        11.426881790161133,
+        3.407737970352173,
+        1.0,
+        1.0
+      ],
+      "std": [
+        4.6134538650512695,
+        1.38138747215271,
+        1.0,
+        1.0
+      ]
+    },
+    "env": {
+      "mean": [
+        6.183929920196533,
+        0.08867432922124863,
+        -0.15350821614265442,
+        0.03030472807586193,
+        -0.005880655255168676,
+        1.1749848127365112,
+        0.19978193938732147,
+        -0.11351966112852097,
+        5.776843547821045,
+        0.804636538028717
+      ],
+      "std": [
+        3.2185862064361572,
+        0.6908882856369019,
+        0.7008779644966125,
+        0.7454655766487122,
+        0.665826141834259,
+        0.8786020278930664,
+        0.6483212113380432,
+        0.7258472442626953,
+        2.7358901500701904,
+        0.7263268232345581
+      ]
+    }
+  },
+  "evaluation_metrics": {
+    "test_mae_kn": 0.23,
+    "test_rmse_kn": 0.446,
+    "test_r2": 0.9899,
+    "single_sample_latency_ms": 1.676,
+    "total_samples": 60000,
+    "train_samples": 48000,
+    "val_samples": 6000,
+    "test_samples": 6000,
+    "train_vessels_mmsi": 2727,
+    "val_vessels_mmsi": 317,
+    "test_vessels_mmsi": 335,
+    "vessel_disjoint": true
+  }
+}
