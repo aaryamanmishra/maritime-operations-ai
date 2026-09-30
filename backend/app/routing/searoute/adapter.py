@@ -1,6 +1,8 @@
 import math
-from typing import List, Tuple, Dict, Any
+from typing import Any
+
 import searoute as sr
+
 from app.domain.weather_routing.models import GeoCoordinate
 
 
@@ -41,7 +43,7 @@ class SeaRouteAdapter:
         self,
         origin: GeoCoordinate,
         destination: GeoCoordinate,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Query the SeaRoute maritime network for water-only passage.
         Coordinates are passed as [lon, lat] per GeoJSON convention.
@@ -52,11 +54,19 @@ class SeaRouteAdapter:
         try:
             route_geojson = sr.searoute(orig_pt, dest_pt, units="naut")
         except Exception as exc:
-            raise RuntimeError(f"SeaRoute pathfinding failed: {exc}") from exc
+            raise ValueError(
+                f"Maritime pathfinding failed between origin ({origin.latitude}, {origin.longitude}) "
+                f"and destination ({destination.latitude}, {destination.longitude}). "
+                f"Ensure waypoints are in navigable maritime waters: {exc}"
+            ) from exc
 
-        coords = route_geojson["geometry"]["coordinates"]  # [[lon, lat], ...]
+        coords = route_geojson.get("geometry", {}).get("coordinates", [])
         if not coords or len(coords) < 2:
-            raise ValueError("SeaRoute returned insufficient coordinates for route")
+            raise ValueError(
+                f"SeaRoute returned insufficient coordinates for route between "
+                f"({origin.latitude}, {origin.longitude}) and ({destination.latitude}, {destination.longitude}). "
+                f"Coordinates may be isolated or on land."
+            )
 
         # Densify segments if spacing > 60 nm, or keep reasonable spacing
         densified_coords = self._sample_and_densify(coords, max_segment_nm=50.0)
@@ -95,8 +105,8 @@ class SeaRouteAdapter:
         }
 
     def _sample_and_densify(
-        self, coords: List[List[float]], max_segment_nm: float = 50.0
-    ) -> List[List[float]]:
+        self, coords: list[list[float]], max_segment_nm: float = 50.0
+    ) -> list[list[float]]:
         """Ensure segments are not too long for weather sampling."""
         densified = [coords[0]]
         for i in range(len(coords) - 1):
@@ -116,9 +126,9 @@ class SeaRouteAdapter:
 
     def generate_alternative_corridors(
         self,
-        base_route: Dict[str, Any],
+        base_route: dict[str, Any],
         lateral_offset_nm: float = 30.0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate candidate corridor routes for weather avoidance.
         Evaluates lateral offsets across open-water waypoints via SeaRoute.

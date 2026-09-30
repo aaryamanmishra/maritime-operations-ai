@@ -1,12 +1,15 @@
-from datetime import datetime, timezone
-from typing import List, Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.domain.vessel_traffic.models import (
-    BoundingBox, NormalizedVesselEvent, VesselCurrentState, VesselDetails, VesselPositionPoint,
-    should_record_history
-)
+
 from app.core.config import settings
+from app.domain.vessel_traffic.models import (
+    BoundingBox,
+    NormalizedVesselEvent,
+    VesselCurrentState,
+    VesselDetails,
+    VesselPositionPoint,
+    should_record_history,
+)
 
 
 class VesselRepository:
@@ -135,7 +138,7 @@ class VesselRepository:
         await self.session.commit()
         return True
 
-    async def get_vessels_in_bbox(self, bbox: BoundingBox, limit: int = 500) -> List[VesselCurrentState]:
+    async def get_vessels_in_bbox(self, bbox: BoundingBox, limit: int = 500) -> list[VesselCurrentState]:
         """
         Spatial query using PostGIS GiST index to fetch current vessel states within a bounding box.
         """
@@ -183,7 +186,7 @@ class VesselRepository:
             ))
         return vessels
 
-    async def get_vessel_details(self, mmsi: int, history_limit: int = 50) -> Optional[VesselDetails]:
+    async def get_vessel_details(self, mmsi: int, history_limit: int = 50) -> VesselDetails | None:
         """
         Fetches full details for a vessel plus its recent persisted track points.
         """

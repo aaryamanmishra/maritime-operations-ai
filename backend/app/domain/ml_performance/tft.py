@@ -1,7 +1,7 @@
+
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Tuple, Optional
+from torch import nn
 
 
 class GatedLinearUnit(nn.Module):
@@ -22,7 +22,7 @@ class GatedResidualNetwork(nn.Module):
         input_dim: int,
         hidden_dim: int,
         output_dim: int,
-        context_dim: Optional[int] = None,
+        context_dim: int | None = None,
         dropout: float = 0.1,
     ):
         super().__init__()
@@ -36,7 +36,7 @@ class GatedResidualNetwork(nn.Module):
         self.layer_norm = nn.LayerNorm(output_dim)
         self.skip = nn.Linear(input_dim, output_dim) if input_dim != output_dim else nn.Identity()
 
-    def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, context: torch.Tensor | None = None) -> torch.Tensor:
         h = self.fc1(x)
         if self.context_fc is not None and context is not None:
             # Broadcast context across sequence if needed
@@ -58,7 +58,7 @@ class VariableSelectionNetwork(nn.Module):
         self,
         num_features: int,
         hidden_dim: int,
-        context_dim: Optional[int] = None,
+        context_dim: int | None = None,
         dropout: float = 0.1,
     ):
         super().__init__()
@@ -75,7 +75,7 @@ class VariableSelectionNetwork(nn.Module):
             dropout=dropout,
         )
 
-    def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, context: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
         # x: (batch, num_features) or (batch, seq_len, num_features)
         transformed = []
         for i in range(self.num_features):
@@ -107,7 +107,7 @@ class InterpretableMultiHeadAttention(nn.Module):
         self.v_linear = nn.Linear(hidden_dim, hidden_dim)
         self.out_proj = nn.Linear(hidden_dim, hidden_dim)
 
-    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         batch_size, seq_len, _ = q.shape
         Q = self.q_linear(q).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         K = self.k_linear(k).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
@@ -127,7 +127,7 @@ class VesselPerformanceTFT(nn.Module):
     Predicts expected future speed over ground (SOG in knots) given:
     1. Historical AIS sequence: SOG, COG (sin/cos), Heading (sin/cos), step displacement.
     2. Static Vessel Context: Ship type embedding, design speed, dimensions.
-    3. Dynamic Environmental Context: Wind speed, wind relative direction, wave height, 
+    3. Dynamic Environmental Context: Wind speed, wind relative direction, wave height,
        wave direction, wave period, swell height, sea surface temperature, ocean currents.
     4. Route Context: Segment bearing, distance.
     """
@@ -176,9 +176,7 @@ class VesselPerformanceTFT(nn.Module):
         ship_type_id: torch.Tensor,   # (batch,)
         vessel_stats: torch.Tensor,   # (batch, 4): normalized [design_speed, length, beam, draft]
         env_features: torch.Tensor,   # (batch, env_num_features)
-    ) -> Dict[str, torch.Tensor]:
-        batch_size = hist_seq.shape[0]
-
+    ) -> dict[str, torch.Tensor]:
         # Step 1: Compute Static Context Representation
         type_emb = self.ship_type_embed(ship_type_id)
         vessel_raw = torch.cat([type_emb, vessel_stats], dim=-1)

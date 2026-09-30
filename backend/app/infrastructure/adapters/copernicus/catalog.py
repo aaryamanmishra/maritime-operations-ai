@@ -1,6 +1,7 @@
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
+
 import httpx
 
 from app.core.config import Settings
@@ -16,7 +17,7 @@ class CopernicusCatalogClient:
     Collection: sentinel-1-grd
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
         self.stac_url = self.settings.CDSE_STAC_URL.rstrip("/")
         if not self.stac_url.endswith("/search"):
@@ -26,18 +27,18 @@ class CopernicusCatalogClient:
 
     async def search_scenes(
         self,
-        bbox: Tuple[float, float, float, float],
+        bbox: tuple[float, float, float, float],
         start_time: datetime,
         end_time: datetime,
         limit: int = 20,
-    ) -> List[SARSceneSummary]:
+    ) -> list[SARSceneSummary]:
         """
         Search Sentinel-1 GRD scenes over a bounding box and time window.
         No cloud cover constraints (SAR penetration through clouds).
         """
         # Format ISO UTC timestamps
-        start_iso = start_time.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        end_iso = end_time.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        start_iso = start_time.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_iso = end_time.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         datetime_range = f"{start_iso}/{end_iso}"
 
         payload = {
@@ -74,7 +75,7 @@ class CopernicusCatalogClient:
                 features = data.get("features", [])
                 logger.info("Retrieved %d Sentinel-1 scenes from Copernicus STAC", len(features))
 
-                scenes: List[SARSceneSummary] = []
+                scenes: list[SARSceneSummary] = []
                 for feat in features:
                     scene_summary = self._parse_stac_feature(feat)
                     if scene_summary:
@@ -86,7 +87,7 @@ class CopernicusCatalogClient:
             logger.warning("Network error contacting Copernicus STAC: %s", exc)
             return []
 
-    def _parse_stac_feature(self, feat: Dict[str, Any]) -> Optional[SARSceneSummary]:
+    def _parse_stac_feature(self, feat: dict[str, Any]) -> SARSceneSummary | None:
         try:
             scene_id = feat["id"]
             props = feat.get("properties", {})
@@ -101,7 +102,7 @@ class CopernicusCatalogClient:
             try:
                 dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
             except ValueError:
-                dt = datetime.now(timezone.utc)
+                dt = datetime.now(UTC)
 
             platform = props.get("platform") or "Sentinel-1"
             orbit_pass = props.get("sat:orbit_state")

@@ -1,7 +1,6 @@
-import json
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from app.core.logging import logger
+from datetime import UTC, datetime
+from typing import Any
+
 from app.domain.vessel_traffic.models import NormalizedVesselEvent
 
 
@@ -12,22 +11,22 @@ class AISStreamAdapter:
     """
 
     @staticmethod
-    def parse_time_utc(time_str: Optional[str]) -> datetime:
+    def parse_time_utc(time_str: str | None) -> datetime:
         if not time_str:
-            return datetime.now(timezone.utc)
+            return datetime.now(UTC)
         try:
             # Format: '2026-09-30 07:50:20.546648276 +0000 UTC'
             # Strip nanoseconds/UTC suffix for standard parsing
             parts = time_str.split(".")
             if len(parts) == 2:
                 sec_part = parts[0]
-                return datetime.strptime(sec_part, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                return datetime.strptime(sec_part, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
             return datetime.fromisoformat(time_str.replace("Z", "+00:00"))
         except Exception:
-            return datetime.now(timezone.utc)
+            return datetime.now(UTC)
 
     @classmethod
-    def normalize_message(cls, raw_data: Dict[str, Any]) -> Optional[NormalizedVesselEvent]:
+    def normalize_message(cls, raw_data: dict[str, Any]) -> NormalizedVesselEvent | None:
         """
         Normalizes a raw AISStream JSON frame into a NormalizedVesselEvent.
         Returns None if message is a system confirmation or invalid.

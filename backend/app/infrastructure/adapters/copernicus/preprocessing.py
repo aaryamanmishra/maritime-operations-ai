@@ -1,8 +1,6 @@
-import math
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+
 import numpy as np
-from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +67,7 @@ class SARPreprocessor:
     def prepare_multichannel_sar(
         self,
         vv_band: np.ndarray,
-        vh_band: Optional[np.ndarray] = None,
+        vh_band: np.ndarray | None = None,
     ) -> np.ndarray:
         """
         Prepare a 3-channel (H, W, 3) uint8 image from VV and optional VH bands.
@@ -89,7 +87,7 @@ class SARPreprocessor:
 
         return stacked
 
-    def generate_tiles(self, scene_image: np.ndarray) -> List[SARTile]:
+    def generate_tiles(self, scene_image: np.ndarray) -> list[SARTile]:
         """
         Divide a scene image (H, W, 3) into overlapping tiles of size tile_size x tile_size.
         """
@@ -102,7 +100,7 @@ class SARPreprocessor:
             padded[:h, :w, :] = scene_image
             return [SARTile(0, padded, 0, 0, w, h, w, h)]
 
-        tiles: List[SARTile] = []
+        tiles: list[SARTile] = []
         tile_idx = 0
 
         for y in range(0, h, step):

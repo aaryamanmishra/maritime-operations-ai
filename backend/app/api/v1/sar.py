@@ -1,22 +1,22 @@
-import os
 import json
 import logging
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+import os
+from typing import Any
 
-from app.infrastructure.database.session import get_db_session, async_session_factory
-from app.infrastructure.database.models.sar import SARScene
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.sar_intelligence.models import (
-    SARSearchRequest,
-    SARSceneSummary,
-    SARJobResponse,
     SARDetectionItem,
-    SARJobStatus,
+    SARJobResponse,
+    SARSceneSummary,
+    SARSearchRequest,
 )
 from app.domain.sar_intelligence.service import SARAnalysisService
+from app.infrastructure.database.models.sar import SARScene
+from app.infrastructure.database.session import async_session_factory, get_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,10 @@ router = APIRouter(prefix="/sar", tags=["dark-vessel-intelligence"])
 
 class SARAnalyzeRequest(BaseModel):
     scene_id: str
-    scene_summary: Optional[SARSceneSummary] = None
+    scene_summary: SARSceneSummary | None = None
 
 
-@router.post("/search", response_model=List[SARSceneSummary])
+@router.post("/search", response_model=list[SARSceneSummary])
 async def search_sentinel1_scenes(request: SARSearchRequest):
     """
     Search Sentinel-1 GRD observations from the Copernicus Data Space STAC catalog.
@@ -47,7 +47,7 @@ async def search_sentinel1_scenes(request: SARSearchRequest):
         logger.error("Scene search failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Copernicus catalog search failed: {str(exc)}",
+            detail=f"Copernicus catalog search failed: {exc!s}",
         )
 
 
@@ -73,7 +73,7 @@ async def start_sar_analysis_job(
         logger.error("Failed creating SAR job for %s: %s", request.scene_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not initiate SAR analysis job: {str(exc)}",
+            detail=f"Could not initiate SAR analysis job: {exc!s}",
         )
 
 
@@ -92,7 +92,7 @@ async def get_sar_job_status(job_id: str):
     return job
 
 
-@router.get("/scenes", response_model=List[Dict[str, Any]])
+@router.get("/scenes", response_model=list[dict[str, Any]])
 async def list_analyzed_scenes(session: AsyncSession = Depends(get_db_session)):
     """
     List all previously analyzed Sentinel-1 scenes stored in PostGIS.
@@ -116,7 +116,7 @@ async def list_analyzed_scenes(session: AsyncSession = Depends(get_db_session)):
     return items
 
 
-@router.get("/scenes/{scene_id}/detections", response_model=List[SARDetectionItem])
+@router.get("/scenes/{scene_id}/detections", response_model=list[SARDetectionItem])
 async def get_scene_detections(
     scene_id: str,
     session: AsyncSession = Depends(get_db_session),

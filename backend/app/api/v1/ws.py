@@ -1,7 +1,8 @@
 import asyncio
 import json
-from typing import Optional
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 from app.core.config import settings
 from app.core.logging import logger
 from app.domain.vessel_traffic.models import BoundingBox
@@ -19,7 +20,7 @@ async def websocket_vessel_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("New WebSocket client connected to /ws/vessels")
 
-    client_bbox: Optional[BoundingBox] = None
+    client_bbox: BoundingBox | None = None
     redis = get_redis_client()
     pubsub = redis.pubsub()
     await pubsub.subscribe(settings.AIS_BROADCAST_CHANNEL)

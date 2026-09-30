@@ -1,6 +1,6 @@
 import math
-from datetime import datetime, timezone
-from typing import Optional, List
+from datetime import UTC, datetime
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -10,23 +10,23 @@ class NormalizedVesselEvent(BaseModel):
     Missing fields remain None; never fabricate data.
     """
     mmsi: int = Field(..., description="9-digit Maritime Mobile Service Identity")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
-    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
-    sog: Optional[float] = Field(None, ge=0.0, le=102.2, description="Speed Over Ground in knots")
-    cog: Optional[float] = Field(None, ge=0.0, le=360.0, description="Course Over Ground in degrees")
-    heading: Optional[float] = Field(None, ge=0.0, le=360.0, description="True heading in degrees")
-    nav_status: Optional[int] = Field(None, ge=0, le=15, description="AIS Navigational Status code")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    latitude: float | None = Field(None, ge=-90.0, le=90.0)
+    longitude: float | None = Field(None, ge=-180.0, le=180.0)
+    sog: float | None = Field(None, ge=0.0, le=102.2, description="Speed Over Ground in knots")
+    cog: float | None = Field(None, ge=0.0, le=360.0, description="Course Over Ground in degrees")
+    heading: float | None = Field(None, ge=0.0, le=360.0, description="True heading in degrees")
+    nav_status: int | None = Field(None, ge=0, le=15, description="AIS Navigational Status code")
     
     # Static & Voyage Attributes
-    ship_name: Optional[str] = None
-    imo: Optional[int] = None
-    ship_type: Optional[int] = None
-    destination: Optional[str] = None
-    callsign: Optional[str] = None
-    length: Optional[float] = None
-    beam: Optional[float] = None
-    draught: Optional[float] = None
+    ship_name: str | None = None
+    imo: int | None = None
+    ship_type: int | None = None
+    destination: str | None = None
+    callsign: str | None = None
+    length: float | None = None
+    beam: float | None = None
+    draught: float | None = None
 
     @field_validator("heading", mode="before")
     @classmethod
@@ -82,33 +82,33 @@ class VesselPositionPoint(BaseModel):
     latitude: float
     longitude: float
     timestamp: datetime
-    sog: Optional[float] = None
-    cog: Optional[float] = None
-    heading: Optional[float] = None
+    sog: float | None = None
+    cog: float | None = None
+    heading: float | None = None
 
 
 class VesselCurrentState(BaseModel):
     mmsi: int
-    name: Optional[str] = None
-    imo: Optional[int] = None
-    callsign: Optional[str] = None
-    ship_type: Optional[int] = None
-    destination: Optional[str] = None
-    length: Optional[float] = None
-    beam: Optional[float] = None
-    draught: Optional[float] = None
+    name: str | None = None
+    imo: int | None = None
+    callsign: str | None = None
+    ship_type: int | None = None
+    destination: str | None = None
+    length: float | None = None
+    beam: float | None = None
+    draught: float | None = None
     latitude: float
     longitude: float
-    sog: Optional[float] = None
-    cog: Optional[float] = None
-    heading: Optional[float] = None
-    nav_status: Optional[int] = None
+    sog: float | None = None
+    cog: float | None = None
+    heading: float | None = None
+    nav_status: int | None = None
     timestamp: datetime
     updated_at: datetime
 
 
 class VesselDetails(VesselCurrentState):
-    recent_track: List[VesselPositionPoint] = []
+    recent_track: list[VesselPositionPoint] = []
 
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -127,7 +127,7 @@ def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> 
     return R * c
 
 
-def heading_delta_deg(h1: Optional[float], h2: Optional[float]) -> float:
+def heading_delta_deg(h1: float | None, h2: float | None) -> float:
     """
     Computes the shortest angular difference between two compass headings in degrees (0..180),
     correctly accounting for the 0°/360° discontinuity.
@@ -139,10 +139,10 @@ def heading_delta_deg(h1: Optional[float], h2: Optional[float]) -> float:
 
 
 def should_record_history(
-    last_lat: Optional[float],
-    last_lon: Optional[float],
-    last_heading: Optional[float],
-    last_timestamp: Optional[datetime],
+    last_lat: float | None,
+    last_lon: float | None,
+    last_heading: float | None,
+    last_timestamp: datetime | None,
     new_event: NormalizedVesselEvent,
     distance_threshold_m: float = 100.0,
     heading_threshold_deg: float = 5.0,

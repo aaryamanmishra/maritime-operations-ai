@@ -1,5 +1,4 @@
-import math
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any
 
 
 class SARGeoreferencer:
@@ -14,8 +13,8 @@ class SARGeoreferencer:
         y: float,
         width: float,
         height: float,
-        corner_coords: Dict[str, Tuple[float, float]],
-    ) -> Tuple[float, float]:
+        corner_coords: dict[str, tuple[float, float]],
+    ) -> tuple[float, float]:
         """
         Convert pixel (x, y) within a raster of dimensions (width, height) to (lon, lat)
         via bilinear interpolation over 4 corner coordinates.
@@ -55,8 +54,8 @@ class SARGeoreferencer:
 
     @staticmethod
     def extract_corners_from_footprint(
-        footprint_geojson: Dict[str, Any],
-    ) -> Dict[str, Tuple[float, float]]:
+        footprint_geojson: dict[str, Any],
+    ) -> dict[str, tuple[float, float]]:
         """
         Extract 4 corners from a GeoJSON Polygon geometry.
         """

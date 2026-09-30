@@ -65,7 +65,7 @@ COPERNICUS_CDSE_CLIENT_ID=optional_cdse_client_id
 COPERNICUS_CDSE_CLIENT_SECRET=optional_cdse_client_secret
 
 # Map basemaps
-VITE_MAP_TILE_STYLE=https://basemaps.cartocdn.com/gl/positron-gl-style/style.json
+VITE_MAP_TILE_STYLE=https://tiles.openfreemap.org/styles/dark
 ```
 
 ---

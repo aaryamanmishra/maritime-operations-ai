@@ -1,6 +1,10 @@
 import math
-from typing import Dict, Any, Optional
-from app.domain.weather_routing.models import VesselCharacteristics, FuelParameters, MarineWeatherConditions
+
+from app.domain.weather_routing.models import (
+    FuelParameters,
+    MarineWeatherConditions,
+    VesselCharacteristics,
+)
 
 
 def calculate_relative_angle(vessel_bearing_deg: float, direction_deg: float) -> float:
@@ -53,7 +57,7 @@ def calculate_segment_physics(
     bearing_deg: float,
     predicted_speed_kn: float,
     duration_hours: float,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Transparent naval architecture and energy estimation layer.
     

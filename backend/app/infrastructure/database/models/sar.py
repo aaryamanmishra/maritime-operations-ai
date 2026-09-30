@@ -1,10 +1,19 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from geoalchemy2 import Geometry
 from sqlalchemy import (
-    BigInteger, Column, DateTime, Integer, Numeric, String, ForeignKey, Index
+    BigInteger,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
-from geoalchemy2 import Geometry
+
 from .vessel import Base
 
 
@@ -21,7 +30,7 @@ class SARScene(Base):
     polarization = Column(String(32), nullable=False, default="VV+VH")
     source = Column(String(64), nullable=False, default="Copernicus CDSE")
     scene_metadata = Column(JSONB, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     # Relationships
     detections = relationship("SARDetection", back_populates="scene", cascade="all, delete-orphan")
@@ -46,7 +55,7 @@ class SARDetection(Base):
     model_version = Column(String(64), nullable=False)
     length_m = Column(Numeric(6, 2), nullable=True)
     heading_deg = Column(Numeric(5, 2), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     # Relationships
     scene = relationship("SARScene", back_populates="detections")
@@ -69,7 +78,7 @@ class AISSARCorrelation(Base):
     match_status = Column(String(32), nullable=False)  # "AIS-MATCHED" | "AIS-UNMATCHED"
     matching_method = Column(String(64), nullable=False, default="spatiotemporal_nearest")
     provenance = Column(JSONB, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     # Relationships
     detection = relationship("SARDetection", back_populates="correlation")

@@ -1,20 +1,23 @@
 import json
-from typing import List, Optional, Dict, Any
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.domain.vessel_traffic.models import (
-    BoundingBox, VesselCurrentState, VesselDetails
+    BoundingBox,
+    VesselCurrentState,
+    VesselDetails,
 )
-from app.infrastructure.database.session import get_db_session
 from app.infrastructure.database.repositories.vessel_repository import VesselRepository
+from app.infrastructure.database.session import get_db_session
 from app.infrastructure.redis.client import get_redis_client
 
 router = APIRouter(prefix="/vessels", tags=["Vessels"])
 
 
-@router.get("", response_model=List[VesselCurrentState])
+@router.get("", response_model=list[VesselCurrentState])
 async def get_vessels_in_bbox(
     min_lat: float = Query(..., ge=-90.0, le=90.0, description="Minimum latitude"),
     min_lon: float = Query(..., ge=-180.0, le=180.0, description="Minimum longitude"),
@@ -22,7 +25,7 @@ async def get_vessels_in_bbox(
     max_lon: float = Query(..., ge=-180.0, le=180.0, description="Maximum longitude"),
     limit: int = Query(500, ge=1, le=1000, description="Maximum number of vessels to return"),
     session: AsyncSession = Depends(get_db_session),
-) -> List[VesselCurrentState]:
+) -> list[VesselCurrentState]:
     """
     Spatial query returning all current vessels within the specified bounding box.
     Uses PostGIS GiST index for fast spatial indexing.
@@ -44,15 +47,15 @@ async def get_vessels_in_bbox(
     return await repo.get_vessels_in_bbox(bbox=bbox, limit=limit)
 
 
-@router.get("/pipeline/status", response_model=Dict[str, Any])
-async def get_pipeline_status(session: AsyncSession = Depends(get_db_session)) -> Dict[str, Any]:
+@router.get("/pipeline/status", response_model=dict[str, Any])
+async def get_pipeline_status(session: AsyncSession = Depends(get_db_session)) -> dict[str, Any]:
     """
     Returns live AIS pipeline observability metrics and connection health.
     """
     redis = get_redis_client()
     raw_status = await redis.get(settings.AIS_STATUS_REDIS_KEY)
 
-    metrics: Dict[str, Any] = {
+    metrics: dict[str, Any] = {
         "connection_state": "disconnected",
         "messages_received": 0,
         "normalized_count": 0,

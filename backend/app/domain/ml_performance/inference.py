@@ -1,15 +1,18 @@
-import os
-import math
 import json
+import math
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Optional
+
 import numpy as np
 import torch
 
 from app.core.logging import logger
-from app.domain.weather_routing.models import VesselCharacteristics, MarineWeatherConditions
 from app.domain.ml_performance.models import PerformancePrediction
 from app.domain.ml_performance.tft import VesselPerformanceTFT
+from app.domain.weather_routing.models import (
+    MarineWeatherConditions,
+    VesselCharacteristics,
+)
 
 # Locate weights path (supports both host and docker mount paths)
 WEIGHT_CANDIDATE_PATHS = [
@@ -28,9 +31,9 @@ class TFTPerformancePredictor:
 
     def __init__(self):
         self.device = torch.device("cpu")  # CPU inference for API stability & low latency
-        self.model: Optional[VesselPerformanceTFT] = None
-        self.metadata: Optional[Dict[str, Any]] = None
-        self.norm_stats: Optional[Dict[str, Any]] = None
+        self.model: VesselPerformanceTFT | None = None
+        self.metadata: dict[str, Any] | None = None
+        self.norm_stats: dict[str, Any] | None = None
         self._load_model_artifacts()
 
     @classmethod
@@ -229,7 +232,6 @@ class TFTPerformancePredictor:
         dir_factor = 0.5 * (1.0 + cos_mu)
         # Kwon approximate speed loss percentage: dV/V approx alpha * Hs^2
         # Larger ships suffer less relative speed loss than smaller vessels
-        disp = vessel.length_m * vessel.beam_m * vessel.draft_m * 0.7
         size_factor = max(1.0 - (vessel.length_m / 400.0), 0.15)
         speed_loss_pct = 0.035 * size_factor * (weather.wave_height_m ** 1.8) * dir_factor
         

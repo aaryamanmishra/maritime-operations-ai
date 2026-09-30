@@ -1,12 +1,13 @@
 import json
 import math
-from datetime import datetime, timezone
-from typing import List, Dict, Tuple, Optional, Any
+from datetime import datetime
+from typing import Any
+
 import httpx
-from app.core.config import settings
+
 from app.core.logging import logger
+from app.domain.weather_routing.models import MarineWeatherConditions
 from app.infrastructure.redis.client import get_redis_client
-from app.domain.weather_routing.models import MarineWeatherConditions, GeoCoordinate
 
 
 class OpenMeteoMarineAdapter:
@@ -30,8 +31,8 @@ class OpenMeteoMarineAdapter:
 
     async def get_weather_for_route_points(
         self,
-        points: List[Tuple[float, float, datetime]],  # [(lat, lon, estimated_time), ...]
-    ) -> Dict[int, MarineWeatherConditions]:
+        points: list[tuple[float, float, datetime]],  # [(lat, lon, estimated_time), ...]
+    ) -> dict[int, MarineWeatherConditions]:
         """
         Retrieve marine weather conditions for a sequence of route waypoints.
         1. Check Redis cache for each waypoint.
@@ -40,8 +41,8 @@ class OpenMeteoMarineAdapter:
         4. Interpolate hourly data to waypoint timestamps.
         """
         redis = get_redis_client()
-        weather_results: Dict[int, MarineWeatherConditions] = {}
-        missing_indices: List[int] = []
+        weather_results: dict[int, MarineWeatherConditions] = {}
+        missing_indices: list[int] = []
 
         # Step 1: Check Redis Cache
         for idx, (lat, lon, dt) in enumerate(points):
@@ -70,8 +71,8 @@ class OpenMeteoMarineAdapter:
                     unique_coords[grid_coord] = []
                 unique_coords[grid_coord].append(idx)
 
-            lats = [c[0] for c in unique_coords.keys()]
-            lons = [c[1] for c in unique_coords.keys()]
+            lats = [c[0] for c in unique_coords]
+            lons = [c[1] for c in unique_coords]
 
             fetched_data = await self._fetch_open_meteo_batch(lats, lons)
 
@@ -96,8 +97,8 @@ class OpenMeteoMarineAdapter:
         return weather_results
 
     async def _fetch_open_meteo_batch(
-        self, lats: List[float], lons: List[float]
-    ) -> Dict[Tuple[float, float], Dict[str, Any]]:
+        self, lats: list[float], lons: list[float]
+    ) -> dict[tuple[float, float], dict[str, Any]]:
         """Call Open-Meteo Marine and Forecast APIs with retry and timeout."""
         if not lats:
             return {}

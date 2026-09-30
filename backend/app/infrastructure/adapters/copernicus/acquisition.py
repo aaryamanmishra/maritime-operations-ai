@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from typing import Optional, Dict, Any
+
 import httpx
 
 from app.core.config import Settings
@@ -11,12 +11,10 @@ logger = logging.getLogger(__name__)
 
 class CDSECredentialsMissingError(Exception):
     """Raised when Copernicus CDSE credentials are not configured in environment."""
-    pass
 
 
 class CDSEAuthenticationError(Exception):
     """Raised when CDSE token request fails."""
-    pass
 
 
 class CopernicusAcquisitionClient:
@@ -25,10 +23,10 @@ class CopernicusAcquisitionClient:
     Auth URL: https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
         self.token_url = self.settings.CDSE_TOKEN_URL
-        self._cached_token: Optional[str] = None
+        self._cached_token: str | None = None
         self._token_expires_at: float = 0.0
 
     def is_configured(self) -> bool:
@@ -52,7 +50,7 @@ class CopernicusAcquisitionClient:
                 "CDSE_CLIENT_SECRET (or CDSE_USERNAME and CDSE_PASSWORD) in your environment variables."
             )
 
-        data: Dict[str, str] = {}
+        data: dict[str, str] = {}
         if self.settings.CDSE_CLIENT_ID and self.settings.CDSE_CLIENT_SECRET:
             data = {
                 "grant_type": "client_credentials",

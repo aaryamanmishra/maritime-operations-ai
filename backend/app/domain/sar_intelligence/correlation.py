@@ -1,10 +1,11 @@
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime, timedelta
+from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.sar_intelligence.models import MatchStatus, SARDetectionItem
+from app.domain.sar_intelligence.models import MatchStatus
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class AISSARCorrelationEngine:
         self,
         distance_km: float,
         time_diff_seconds: float,
-    ) -> Tuple[MatchStatus, str]:
+    ) -> tuple[MatchStatus, str]:
         """
         Evaluate candidate proximity against configured spatial and temporal thresholds.
         """
@@ -59,7 +60,7 @@ class AISSARCorrelationEngine:
         lat: float,
         lon: float,
         acquisition_time: datetime,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Find the nearest plausible AIS candidate within [acquisition_time - window, acquisition_time + window]
         and within max_distance_km of (lat, lon).
@@ -70,7 +71,7 @@ class AISSARCorrelationEngine:
         query = text("""
             WITH candidates AS (
                 -- 1. Check current_vessel_state
-                SELECT 
+                SELECT
                     mmsi,
                     timestamp,
                     ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS dist_m
@@ -81,7 +82,7 @@ class AISSARCorrelationEngine:
                 UNION ALL
                 
                 -- 2. Check vessel_position_history
-                SELECT 
+                SELECT
                     mmsi,
                     timestamp,
                     ST_Distance(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS dist_m
@@ -89,7 +90,7 @@ class AISSARCorrelationEngine:
                 WHERE timestamp BETWEEN :start_time AND :end_time
                   AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :max_dist_m)
             )
-            SELECT 
+            SELECT
                 mmsi,
                 timestamp,
                 dist_m,

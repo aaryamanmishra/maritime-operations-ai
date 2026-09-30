@@ -1,20 +1,19 @@
-import math
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Tuple
+from datetime import datetime, timedelta
+from typing import Any
+
 from app.core.logging import logger
+from app.domain.ml_performance.inference import TFTPerformancePredictor
 from app.domain.weather_routing.models import (
+    GeoCoordinate,
+    NavigationalRoute,
     RouteOptimizationRequest,
     RouteOptimizationResponse,
-    NavigationalRoute,
-    RouteSummary,
     RouteSegment,
-    GeoCoordinate,
-    MarineWeatherConditions,
+    RouteSummary,
 )
 from app.domain.weather_routing.physics import calculate_segment_physics
-from app.domain.ml_performance.inference import TFTPerformancePredictor
-from app.routing.searoute.adapter import SeaRouteAdapter
 from app.infrastructure.adapters.open_meteo.adapter import OpenMeteoMarineAdapter
+from app.routing.searoute.adapter import SeaRouteAdapter
 
 
 class WeatherAwareRouteOptimizer:
@@ -102,17 +101,17 @@ class WeatherAwareRouteOptimizer:
 
     async def _evaluate_route_candidate(
         self,
-        raw_route: Dict[str, Any],
+        raw_route: dict[str, Any],
         request: RouteOptimizationRequest,
         route_type: str,
-    ) -> Tuple[NavigationalRoute, float]:
+    ) -> tuple[NavigationalRoute, float]:
         """Fetch weather along segments, run TFT performance model, compute physics & cost."""
         segments_raw = raw_route["segments"]
         departure_time = request.departure_time
         calm_speed = request.vessel.design_speed_kn
 
         # Pre-estimate timestamps for weather query points
-        points_to_query: List[Tuple[float, float, datetime]] = []
+        points_to_query: list[tuple[float, float, datetime]] = []
         cum_time_hours = 0.0
 
         for seg in segments_raw:
@@ -125,7 +124,7 @@ class WeatherAwareRouteOptimizer:
         # Retrieve Marine Weather (cached in Redis / fetched from Open-Meteo)
         weather_map = await self.weather.get_weather_for_route_points(points_to_query)
 
-        evaluated_segments: List[RouteSegment] = []
+        evaluated_segments: list[RouteSegment] = []
         current_time = departure_time
         total_distance_nm = 0.0
         total_energy_kwh = 0.0
@@ -141,19 +140,12 @@ class WeatherAwareRouteOptimizer:
             start_lat, start_lon = seg["start"]
             end_lat, end_lon = seg["end"]
 
-            # Match weather or default to mild conditions
+            # Match weather; must fail honestly if unavailable
             weather = weather_map.get(idx)
             if not weather:
-                weather = MarineWeatherConditions(
-                    timestamp=current_time,
-                    wave_height_m=1.0,
-                    wave_direction_deg=(bearing + 180.0) % 360.0,
-                    wave_period_s=5.0,
-                    wind_speed_mps=6.0,
-                    wind_direction_deg=bearing,
-                    ocean_current_velocity_mps=0.1,
-                    ocean_current_direction_deg=bearing,
-                    sea_surface_temperature_c=16.0,
+                raise RuntimeError(
+                    f"Required marine weather forecast data is unavailable for route waypoint {idx} "
+                    f"at ({start_lat:.3f}, {start_lon:.3f}). Weather-aware calculation cannot proceed."
                 )
 
             wave_heights.append(weather.wave_height_m)

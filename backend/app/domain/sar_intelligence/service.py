@@ -1,34 +1,38 @@
-import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
-import numpy as np
-from PIL import Image
+from datetime import UTC, datetime, timedelta
+from typing import Optional
 
+import numpy as np
+from fastapi import BackgroundTasks
+from PIL import Image
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import BackgroundTasks
 
 from app.core.config import Settings
-from app.infrastructure.database.models.sar import SARScene, SARDetection, AISSARCorrelation
+from app.domain.sar_intelligence.correlation import AISSARCorrelationEngine
+from app.domain.sar_intelligence.inference import YOLO26sVesselDetector
 from app.domain.sar_intelligence.models import (
+    MatchStatus,
+    SARDetectionItem,
     SARJobResponse,
     SARJobStatus,
     SARSceneSummary,
-    SARDetectionItem,
-    MatchStatus,
 )
-from app.infrastructure.adapters.copernicus.catalog import CopernicusCatalogClient
 from app.infrastructure.adapters.copernicus.acquisition import (
     CopernicusAcquisitionClient,
-    CDSECredentialsMissingError,
 )
-from app.infrastructure.adapters.copernicus.preprocessing import SARPreprocessor, SARTile
+from app.infrastructure.adapters.copernicus.catalog import CopernicusCatalogClient
 from app.infrastructure.adapters.copernicus.georeference import SARGeoreferencer
-from app.domain.sar_intelligence.inference import YOLO26sVesselDetector
-from app.domain.sar_intelligence.correlation import AISSARCorrelationEngine
+from app.infrastructure.adapters.copernicus.preprocessing import (
+    SARPreprocessor,
+)
+from app.infrastructure.database.models.sar import (
+    AISSARCorrelation,
+    SARDetection,
+    SARScene,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,7 @@ class SARAnalysisService:
 
     _instance: Optional["SARAnalysisService"] = None
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
         self.catalog_client = CopernicusCatalogClient(self.settings)
         self.acquisition_client = CopernicusAcquisitionClient(self.settings)
@@ -54,10 +58,10 @@ class SARAnalysisService:
             time_window_minutes=self.settings.SAR_CORRELATION_TIME_WINDOW_MINUTES,
             max_distance_km=self.settings.SAR_CORRELATION_DISTANCE_KM,
         )
-        self._jobs: Dict[str, SARJobResponse] = {}
+        self._jobs: dict[str, SARJobResponse] = {}
 
     @classmethod
-    def get_instance(cls, settings: Optional[Settings] = None) -> "SARAnalysisService":
+    def get_instance(cls, settings: Settings | None = None) -> "SARAnalysisService":
         if cls._instance is None:
             cls._instance = cls(settings)
         return cls._instance
@@ -68,7 +72,7 @@ class SARAnalysisService:
         start_time: datetime,
         end_time: datetime,
         limit: int = 20,
-    ) -> List[SARSceneSummary]:
+    ) -> list[SARSceneSummary]:
         """Search Copernicus catalog for Sentinel-1 GRD scenes without downloading data."""
         return await self.catalog_client.search_scenes(
             bbox=bbox,
@@ -77,7 +81,7 @@ class SARAnalysisService:
             limit=limit,
         )
 
-    def get_job(self, job_id: str) -> Optional[SARJobResponse]:
+    def get_job(self, job_id: str) -> SARJobResponse | None:
         """Retrieve live status of an asynchronous SAR job."""
         return self._jobs.get(job_id)
 
@@ -86,12 +90,24 @@ class SARAnalysisService:
         scene_id: str,
         background_tasks: BackgroundTasks,
         session_factory,
-        scene_summary: Optional[SARSceneSummary] = None,
+        scene_summary: SARSceneSummary | None = None,
     ) -> SARJobResponse:
         """
         Register and initiate a background SAR analysis job.
         Heavy inference is decoupled from the HTTP request cycle.
         """
+        # Check if an existing in-flight job for this scene is already executing
+        for existing_job in self._jobs.values():
+            if existing_job.scene_id == scene_id and existing_job.status in (
+                SARJobStatus.QUEUED,
+                SARJobStatus.DOWNLOADING,
+                SARJobStatus.PREPROCESSING,
+                SARJobStatus.INFERENCE,
+                SARJobStatus.CORRELATING,
+            ):
+                logger.info("Reusing existing in-flight SAR job %s for scene %s", existing_job.job_id, scene_id)
+                return existing_job
+
         job_id = f"sar-job-{uuid.uuid4().hex[:10]}"
         initial_job = SARJobResponse(
             job_id=job_id,
@@ -118,7 +134,7 @@ class SARAnalysisService:
         job_id: str,
         scene_id: str,
         session_factory,
-        scene_summary: Optional[SARSceneSummary] = None,
+        scene_summary: SARSceneSummary | None = None,
     ):
         """Asynchronous execution lifecycle for SAR asset downloading, inference, and correlation."""
         job = self._jobs[job_id]
@@ -142,7 +158,7 @@ class SARAnalysisService:
             if not db_scene:
                 if not scene_summary:
                     # Query catalog for this specific scene ID
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     candidates = await self.catalog_client.search_scenes(
                         bbox=(-180.0, -90.0, 180.0, 90.0),
                         start_time=now - timedelta(days=90),
@@ -158,7 +174,7 @@ class SARAnalysisService:
                     # Construct fallback scene summary from ID
                     scene_summary = SARSceneSummary(
                         scene_id=scene_id,
-                        acquisition_time=datetime.now(timezone.utc),
+                        acquisition_time=datetime.now(UTC),
                         platform="Sentinel-1A",
                         footprint={
                             "type": "Polygon",
@@ -254,8 +270,8 @@ class SARAnalysisService:
             job.progress_percent = 80
             job.message = "Correlating detections against AIS within ±15 minutes and 3.0 km"
 
-            acq_time = scene_summary.acquisition_time if scene_summary else datetime.now(timezone.utc)
-            detection_items: List[SARDetectionItem] = []
+            acq_time = scene_summary.acquisition_time if scene_summary else datetime.now(UTC)
+            detection_items: list[SARDetectionItem] = []
             matched_count = 0
             unmatched_count = 0
 
@@ -335,7 +351,7 @@ class SARAnalysisService:
             job.detections_count = len(detection_items)
             job.matched_count = matched_count
             job.unmatched_count = unmatched_count
-            job.completed_at = datetime.now(timezone.utc)
+            job.completed_at = datetime.now(UTC)
             job.detections = detection_items
 
             logger.info("SAR job %s finished successfully: %d detections", job_id, len(detection_items))
@@ -344,17 +360,17 @@ class SARAnalysisService:
             logger.exception("SAR workflow failed for job %s: %s", job_id, exc)
             job.status = SARJobStatus.FAILED
             job.progress_percent = 100
-            job.message = f"SAR analysis failed: {str(exc)}"
+            job.message = f"SAR analysis failed: {exc!s}"
             job.error_detail = str(exc)
 
     async def get_scene_detections(
         self,
         scene_id: str,
         session: AsyncSession,
-    ) -> List[SARDetectionItem]:
+    ) -> list[SARDetectionItem]:
         """Query persisted detections for a scene with their AIS correlation join."""
         query = text("""
-            SELECT 
+            SELECT
                 d.detection_id,
                 d.scene_id,
                 s.acquisition_time,
@@ -378,7 +394,7 @@ class SARAnalysisService:
         """)
 
         result = await session.execute(query, {"scene_id": scene_id})
-        items: List[SARDetectionItem] = []
+        items: list[SARDetectionItem] = []
 
         for row in result.fetchall():
             (

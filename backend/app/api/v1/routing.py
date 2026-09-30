@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+
 from app.core.logging import logger
 from app.domain.weather_routing.models import (
     RouteOptimizationRequest,

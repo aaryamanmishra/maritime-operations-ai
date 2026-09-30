@@ -1,10 +1,10 @@
-import os
 import json
-import uuid
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+import os
+import uuid
+from typing import Any, Optional
+
 import numpy as np
-import torch
 from ultralytics import YOLO
 
 from app.core.config import Settings
@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 def non_max_suppression_boxes(
-    boxes: List[Dict[str, Any]],
+    boxes: list[dict[str, Any]],
     iou_threshold: float = 0.35,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Standard greedy Non-Maximum Suppression (NMS) over candidate vessel detections.
     Each box is a dict containing 'bbox' [xmin, ymin, xmax, ymax] and 'confidence'.
@@ -26,7 +26,7 @@ def non_max_suppression_boxes(
         return []
 
     sorted_boxes = sorted(boxes, key=lambda b: b["confidence"], reverse=True)
-    keep: List[Dict[str, Any]] = []
+    keep: list[dict[str, Any]] = []
 
     for cand in sorted_boxes:
         c_box = cand["bbox"]
@@ -67,10 +67,10 @@ class YOLO26sVesselDetector:
 
     _instance: Optional["YOLO26sVesselDetector"] = None
 
-    def __init__(self, weights_path: Optional[str] = None):
+    def __init__(self, weights_path: str | None = None):
         settings = Settings()
         self.weights_path = weights_path or settings.SAR_MODEL_WEIGHTS_PATH
-        self.metadata: Dict[str, Any] = {}
+        self.metadata: dict[str, Any] = {}
         self.model = None
         self.model_version = "yolo26s-opensar-v1"
         self.task = "detect"
@@ -134,7 +134,7 @@ class YOLO26sVesselDetector:
         )
 
     @classmethod
-    def get_instance(cls, weights_path: Optional[str] = None) -> "YOLO26sVesselDetector":
+    def get_instance(cls, weights_path: str | None = None) -> "YOLO26sVesselDetector":
         if cls._instance is None:
             cls._instance = cls(weights_path)
         return cls._instance
@@ -143,7 +143,7 @@ class YOLO26sVesselDetector:
         self,
         tile_image: np.ndarray,
         confidence_threshold: float = 0.25,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Run inference on a single (H, W, 3) preprocessed SAR tile.
         Returns raw bounding boxes, confidence scores, and class predictions.
@@ -186,12 +186,12 @@ class YOLO26sVesselDetector:
 
     def predict_scene_tiles(
         self,
-        tiles: List[SARTile],
-        corner_coords: Dict[str, Tuple[float, float]],
+        tiles: list[SARTile],
+        corner_coords: dict[str, tuple[float, float]],
         parent_width: int,
         parent_height: int,
         confidence_threshold: float = 0.25,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Run inference across all preprocessed SAR tiles, remap bounding boxes to
         global scene pixel coordinates, execute spatial NMS, and georeference to (lat, lon).
@@ -200,7 +200,7 @@ class YOLO26sVesselDetector:
         if not self.model:
             raise RuntimeError(f"YOLO26s model not loaded. Weights file missing at {self.weights_path}")
 
-        raw_candidates: List[Dict[str, Any]] = []
+        raw_candidates: list[dict[str, Any]] = []
 
         for tile in tiles:
             tile_detections = self.predict_single_tile(
@@ -230,7 +230,7 @@ class YOLO26sVesselDetector:
         filtered_candidates = non_max_suppression_boxes(raw_candidates, iou_threshold=0.35)
 
         # Georeference filtered detections
-        georeferenced: List[Dict[str, Any]] = []
+        georeferenced: list[dict[str, Any]] = []
         for cand in filtered_candidates:
             s_xmin, s_ymin, s_xmax, s_ymax = cand["bbox"]
             center_x = (s_xmin + s_xmax) / 2.0

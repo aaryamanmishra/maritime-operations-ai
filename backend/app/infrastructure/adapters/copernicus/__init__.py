@@ -1,11 +1,11 @@
-from .catalog import CopernicusCatalogClient
 from .acquisition import CopernicusAcquisitionClient
-from .preprocessing import SARPreprocessor
+from .catalog import CopernicusCatalogClient
 from .georeference import SARGeoreferencer
+from .preprocessing import SARPreprocessor
 
 __all__ = [
-    "CopernicusCatalogClient",
     "CopernicusAcquisitionClient",
-    "SARPreprocessor",
+    "CopernicusCatalogClient",
     "SARGeoreferencer",
+    "SARPreprocessor",
 ]

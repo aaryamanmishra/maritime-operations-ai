@@ -1,6 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
+
 from app.infrastructure.database.session import check_database_connection
 from app.infrastructure.redis.client import check_redis_connection
 
@@ -23,7 +25,7 @@ class ReadinessResponse(BaseModel):
 async def liveness() -> LivenessResponse:
     return LivenessResponse(
         status="alive",
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -40,5 +42,5 @@ async def readiness(response: Response) -> ReadinessResponse:
         status="ready" if is_ready else "degraded",
         database="ok" if db_ok else "unavailable",
         redis="ok" if redis_ok else "unavailable",
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )

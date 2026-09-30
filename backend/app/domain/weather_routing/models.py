@@ -1,6 +1,7 @@
-from datetime import datetime
-from typing import List, Optional, Literal, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from datetime import UTC, datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class GeoCoordinate(BaseModel):
@@ -23,8 +24,8 @@ class VesselCharacteristics(BaseModel):
     design_speed_kn: float = Field(..., gt=2.0, lt=45.0, description="Calm-water design speed in knots")
     
     # Optional parameters with engineering defaults
-    displacement_t: Optional[float] = Field(None, gt=10.0, description="Loaded displacement in metric tonnes")
-    propulsion_power_kw: Optional[float] = Field(None, gt=50.0, description="Installed Maximum Continuous Rating (MCR) in kW")
+    displacement_t: float | None = Field(None, gt=10.0, description="Loaded displacement in metric tonnes")
+    propulsion_power_kw: float | None = Field(None, gt=50.0, description="Installed Maximum Continuous Rating (MCR) in kW")
     engine_efficiency: float = Field(0.42, gt=0.2, lt=0.6, description="Brake thermal efficiency of engine (default 0.42)")
     propulsive_efficiency: float = Field(0.65, gt=0.3, lt=0.85, description="Quasi-propulsive coefficient eta_D (default 0.65)")
 
@@ -56,10 +57,20 @@ class RouteOptimizationRequest(BaseModel):
         "balanced", description="Optimization objective weighting"
     )
 
-    @field_validator("origin", "destination")
+    @field_validator("departure_time")
     @classmethod
-    def validate_coords(cls, v: GeoCoordinate) -> GeoCoordinate:
+    def validate_departure_time(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            return v.replace(tzinfo=UTC)
         return v
+
+    @model_validator(mode="after")
+    def validate_endpoints_differ(self):
+        lat_diff = abs(self.origin.latitude - self.destination.latitude)
+        lon_diff = abs(self.origin.longitude - self.destination.longitude)
+        if lat_diff < 0.001 and lon_diff < 0.001:
+            raise ValueError("Origin and destination must be distinct navigational waypoints")
+        return self
 
 
 class MarineWeatherConditions(BaseModel):
@@ -74,8 +85,8 @@ class MarineWeatherConditions(BaseModel):
     ocean_current_direction_deg: float = Field(0.0, ge=0.0, le=360.0, description="Surface current direction in degrees")
     sea_surface_temperature_c: float = Field(15.0, description="Sea surface temperature in Celsius")
     swell_wave_height_m: float = Field(0.0, ge=0.0, description="Swell wave height in meters")
-    relative_wind_direction_deg: Optional[float] = None
-    relative_wave_direction_deg: Optional[float] = None
+    relative_wind_direction_deg: float | None = None
+    relative_wave_direction_deg: float | None = None
 
 
 class RouteSegment(BaseModel):
@@ -124,9 +135,9 @@ class RouteSummary(BaseModel):
 class NavigationalRoute(BaseModel):
     """Complete route result with GeoJSON LineString geometry and segment details."""
     route_type: Literal["base_maritime", "weather_aware"]
-    geometry: Dict[str, Any]  # GeoJSON LineString
+    geometry: dict[str, Any]  # GeoJSON LineString
     summary: RouteSummary
-    segments: List[RouteSegment]
+    segments: list[RouteSegment]
 
 
 class RouteOptimizationResponse(BaseModel):
@@ -135,7 +146,7 @@ class RouteOptimizationResponse(BaseModel):
     base_route: NavigationalRoute
     weather_aware_route: NavigationalRoute
     route_diverged: bool
-    summary_comparison: Dict[str, Any]
+    summary_comparison: dict[str, Any]
     model_version: str = "TFT-v1.0.0-NOAA-TrackA"
     weather_provider: str = "Open-Meteo Marine API (CC-BY 4.0)"
     disclaimer: str = (

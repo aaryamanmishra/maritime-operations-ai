@@ -1,9 +1,16 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from geoalchemy2 import Geometry
 from sqlalchemy import (
-    BigInteger, Column, DateTime, Integer, Numeric, String, ForeignKey, Index
+    BigInteger,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
 )
 from sqlalchemy.orm import declarative_base, relationship
-from geoalchemy2 import Geometry
 
 Base = declarative_base()
 
@@ -20,7 +27,7 @@ class VesselIdentity(Base):
     beam = Column(Numeric(8, 2), nullable=True)
     draught = Column(Numeric(6, 2), nullable=True)
     destination = Column(String(128), nullable=True)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     # Relationships
     current_state = relationship("CurrentVesselState", back_populates="identity", uselist=False, cascade="all, delete-orphan")
@@ -39,7 +46,7 @@ class CurrentVesselState(Base):
     cog = Column(Numeric(5, 2), nullable=True)
     heading = Column(Numeric(5, 2), nullable=True)
     nav_status = Column(Integer, nullable=True)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     identity = relationship("VesselIdentity", back_populates="current_state")
 

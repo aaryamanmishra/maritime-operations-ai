@@ -1,12 +1,14 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1.router import api_legacy_router, api_v1_router
+from app.api.v1.ws import ws_router
 from app.core.config import settings
 from app.core.logging import logger, setup_logging
 from app.core.middleware import CorrelationIdMiddleware
-from app.api.v1.router import api_v1_router, api_legacy_router
-from app.api.v1.ws import ws_router
 from app.infrastructure.database.session import engine
 from app.infrastructure.redis.client import close_redis_connection, get_redis_client
 

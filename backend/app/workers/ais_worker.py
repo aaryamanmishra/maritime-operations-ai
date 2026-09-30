@@ -1,8 +1,8 @@
 import asyncio
 import json
 import random
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from datetime import UTC, datetime
+
 import websockets
 from websockets.exceptions import ConnectionClosed
 
@@ -10,9 +10,9 @@ from app.core.config import settings
 from app.core.logging import logger, setup_logging
 from app.domain.vessel_traffic.models import NormalizedVesselEvent
 from app.infrastructure.adapters.aisstream.adapter import AISStreamAdapter
-from app.infrastructure.database.session import async_session_factory
 from app.infrastructure.database.repositories.vessel_repository import VesselRepository
-from app.infrastructure.redis.client import get_redis_client, close_redis_connection
+from app.infrastructure.database.session import async_session_factory
+from app.infrastructure.redis.client import close_redis_connection, get_redis_client
 
 
 class AISPipelineWorker:
@@ -33,8 +33,8 @@ class AISPipelineWorker:
         self._stream_writes = 0
         self._persisted_count = 0
         self._malformed_count = 0
-        self._last_message_at: Optional[datetime] = None
-        self._connected_at: Optional[datetime] = None
+        self._last_message_at: datetime | None = None
+        self._connected_at: datetime | None = None
 
     async def start(self):
         self._running = True
@@ -97,7 +97,7 @@ class AISPipelineWorker:
                     close_timeout=10,
                 ) as ws:
                     self._connection_state = "connected"
-                    self._connected_at = datetime.now(timezone.utc)
+                    self._connected_at = datetime.now(UTC)
                     backoff = 2.0  # Reset backoff upon successful connection
                     logger.info("AISStream WebSocket connection established successfully.")
 
@@ -127,7 +127,7 @@ class AISPipelineWorker:
                             break
 
                         self._messages_received += 1
-                        self._last_message_at = datetime.now(timezone.utc)
+                        self._last_message_at = datetime.now(UTC)
 
                         try:
                             data = json.loads(raw_msg)
@@ -270,7 +270,7 @@ class AISPipelineWorker:
                 settings.AIS_BBOX_MAX_LAT,
                 settings.AIS_BBOX_MAX_LON,
             ],
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         await redis.set(
             settings.AIS_STATUS_REDIS_KEY,

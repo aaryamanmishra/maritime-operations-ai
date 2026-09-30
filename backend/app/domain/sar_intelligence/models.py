@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -20,7 +21,7 @@ class SARJobStatus(str, Enum):
 
 
 class SARSearchRequest(BaseModel):
-    bbox: Tuple[float, float, float, float] = Field(
+    bbox: tuple[float, float, float, float] = Field(
         ...,
         description="Spatial bounding box [min_lon, min_lat, max_lon, max_lat] in WGS84 EPSG:4326",
     )
@@ -30,7 +31,7 @@ class SARSearchRequest(BaseModel):
 
     @field_validator("bbox")
     @classmethod
-    def validate_bbox(cls, v: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+    def validate_bbox(cls, v: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
         min_lon, min_lat, max_lon, max_lat = v
         if not (-180.0 <= min_lon <= 180.0 and -180.0 <= max_lon <= 180.0):
             raise ValueError(f"Longitude must be in [-180, 180], got [{min_lon}, {max_lon}]")
@@ -54,15 +55,15 @@ class SARSceneSummary(BaseModel):
     scene_id: str
     acquisition_time: datetime
     platform: str  # e.g., "Sentinel-1A"
-    orbit_pass: Optional[str] = None  # "ASCENDING" | "DESCENDING"
-    orbit_number: Optional[int] = None
-    footprint: Dict[str, Any]  # GeoJSON Polygon geometry
+    orbit_pass: str | None = None  # "ASCENDING" | "DESCENDING"
+    orbit_number: int | None = None
+    footprint: dict[str, Any]  # GeoJSON Polygon geometry
     polarization: str = "VV+VH"
     processing_level: str = "LEVEL1_GRD"
     source: str = "Copernicus CDSE"
-    quicklook_url: Optional[str] = None
-    download_url: Optional[str] = None
-    scene_metadata: Dict[str, Any] = Field(default_factory=dict)
+    quicklook_url: str | None = None
+    download_url: str | None = None
+    scene_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SARDetectionItem(BaseModel):
@@ -71,17 +72,17 @@ class SARDetectionItem(BaseModel):
     acquisition_time: datetime
     latitude: float
     longitude: float
-    pixel_bbox: Optional[Dict[str, float]] = None
+    pixel_bbox: dict[str, float] | None = None
     confidence: float = Field(..., ge=0.0, le=1.0)
     model_version: str
-    length_m: Optional[float] = None
-    heading_deg: Optional[float] = None
+    length_m: float | None = None
+    heading_deg: float | None = None
     match_status: MatchStatus
-    candidate_mmsi: Optional[int] = None
-    time_difference_seconds: Optional[float] = None
-    distance_km: Optional[float] = None
+    candidate_mmsi: int | None = None
+    time_difference_seconds: float | None = None
+    distance_km: float | None = None
     matching_method: str = "spatiotemporal_nearest"
-    provenance: Optional[Dict[str, Any]] = None
+    provenance: dict[str, Any] | None = None
 
 
 class SARJobResponse(BaseModel):
@@ -93,7 +94,7 @@ class SARJobResponse(BaseModel):
     detections_count: int = 0
     matched_count: int = 0
     unmatched_count: int = 0
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    completed_at: Optional[datetime] = None
-    detections: List[SARDetectionItem] = Field(default_factory=list)
-    error_detail: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
+    detections: list[SARDetectionItem] = Field(default_factory=list)
+    error_detail: str | None = None
