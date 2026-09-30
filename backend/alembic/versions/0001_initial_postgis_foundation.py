@@ -1,7 +1,7 @@
 """initial postgis foundation
 
 Revision ID: 0001_initial_postgis_foundation
-Revises: 
+Revises:
 Create Date: 2026-09-30 13:00:00.000000
 
 """

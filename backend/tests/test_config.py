@@ -1,8 +1,8 @@
-import pytest
 from app.core.config import Settings
 
 
-def test_settings_defaults():
+def test_settings_defaults(monkeypatch):
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
     settings = Settings()
     assert settings.ENVIRONMENT == "development"
     assert settings.APP_PORT == 8000

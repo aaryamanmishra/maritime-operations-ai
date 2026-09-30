@@ -10,7 +10,6 @@ from app.domain.weather_routing.models import (
 from app.domain.weather_routing.physics import (
     calculate_relative_angle,
     calculate_segment_physics,
-    estimate_displacement,
 )
 from app.routing.searoute.adapter import SeaRouteAdapter, haversine_distance_nm, calculate_bearing_deg
 from app.infrastructure.adapters.open_meteo.adapter import OpenMeteoMarineAdapter

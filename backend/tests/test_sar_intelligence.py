@@ -6,10 +6,7 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.domain.sar_intelligence.models import (
     MatchStatus,
-    SARJobStatus,
     SARSearchRequest,
-    SARSceneSummary,
-    SARDetectionItem,
 )
 from app.infrastructure.adapters.copernicus.georeference import SARGeoreferencer
 from app.infrastructure.adapters.copernicus.preprocessing import SARPreprocessor, SARTile
@@ -237,7 +234,6 @@ def test_ais_sar_correlation_logic():
     engine = AISSARCorrelationEngine(time_window_minutes=15.0, max_distance_km=3.0)
 
     # Case 1: Match within 1.2 km and 5 minutes
-    now = datetime.now(timezone.utc)
     match_status, explanation = engine.evaluate_candidate(
         distance_km=1.2,
         time_diff_seconds=300.0,
