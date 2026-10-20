@@ -1,8 +1,17 @@
+export type GeographicContextStatus =
+  | "PLAUSIBLE_WATER"
+  | "TERRESTRIAL_CLUTTER"
+  | "AMBIGUOUS_COASTAL"
+  | "UNKNOWN";
+
+export type SARModality = "GRD" | "SLC";
+
 export interface SARSearchRequest {
   bbox: [number, number, number, number];
   start_time: string;
   end_time: string;
   limit?: number;
+  modality?: SARModality;
 }
 
 export interface SARSceneSummary {
@@ -17,6 +26,7 @@ export interface SARSceneSummary {
   };
   polarization: string;
   processing_level: string;
+  modality?: string;
   source: string;
   quicklook_url?: string;
   download_url?: string;
@@ -39,9 +49,12 @@ export interface SARDetectionItem {
   };
   confidence: number;
   model_version: string;
+  modality?: string;
   length_m?: number;
   heading_deg?: number;
   match_status: MatchStatus;
+  surface_context?: GeographicContextStatus;
+  is_operational_vessel?: boolean;
   candidate_mmsi?: number;
   time_difference_seconds?: number;
   distance_km?: number;
@@ -54,6 +67,18 @@ export interface SARDetectionItem {
     distance_km?: number;
     time_difference_seconds?: number;
     algorithm_version?: string;
+    geolocation_method?: string;
+    range_pixel_spacing_m?: number;
+    azimuth_pixel_spacing_m?: number;
+    geographic_context?: {
+      status?: GeographicContextStatus;
+      reason?: string;
+      is_operational_vessel?: boolean;
+      distance_to_coast_km?: number;
+      is_on_land?: boolean;
+      data_source?: string;
+    };
+    [key: string]: any;
   };
 }
 
@@ -70,6 +95,7 @@ export interface SARJobResponse {
   job_id: string;
   scene_id: string;
   status: SARJobStatus;
+  modality?: SARModality | string;
   progress_percent: number;
   message: string;
   detections_count: number;
@@ -96,12 +122,17 @@ export async function searchSARScenes(req: SARSearchRequest): Promise<SARSceneSu
 
 export async function startSARJob(
   sceneId: string,
-  sceneSummary?: SARSceneSummary
+  sceneSummary?: SARSceneSummary,
+  modality: SARModality = "GRD"
 ): Promise<SARJobResponse> {
   const res = await fetch("/api/v1/sar/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scene_id: sceneId, scene_summary: sceneSummary }),
+    body: JSON.stringify({
+      scene_id: sceneId,
+      scene_summary: sceneSummary,
+      modality: modality || sceneSummary?.modality || "GRD",
+    }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Failed to initiate SAR job" }));

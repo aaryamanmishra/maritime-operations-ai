@@ -145,7 +145,7 @@ def export_artifacts(
         "model_name": "YOLO26s-SAR-Vessel",
         "model_architecture": "yolo26s",
         "task": "detect",
-        "dataset_name": "OpenSAR Insight Sentinel-1 GRD",
+        "dataset_name": "OpenSAR Insight Sentinel-1 SLC",
         "dataset_splits": {
             "train": train_count,
             "val": val_count,

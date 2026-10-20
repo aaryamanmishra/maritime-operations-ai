@@ -59,3 +59,14 @@ export interface PipelineStatus {
 }
 
 export type IngestionStatus = 'LIVE' | 'STALE' | 'DISCONNECTED';
+
+export type {
+  GeographicContextStatus,
+  SARModality,
+  SARSearchRequest,
+  SARSceneSummary,
+  MatchStatus,
+  SARDetectionItem,
+  SARJobStatus,
+  SARJobResponse,
+} from '../services/sarApi';

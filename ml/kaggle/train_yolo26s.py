@@ -73,7 +73,7 @@ def verify_gpu_environment(allow_cpu_override: bool = False) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="Train YOLO26s on Kaggle GPU for SAR vessel detection.")
-    parser.add_argument("--data-dir", type=str, default=None, help="Path to opensar_filtered dataset root")
+    parser.add_argument("--data-dir", type=str, default=None, help="Path to opensar_slc_corrected dataset root or archive")
     parser.add_argument("--epochs", type=int, default=150, help="Maximum epochs to train (default: 150)")
     parser.add_argument("--batch-size", type=int, default=16, help="Batch size (default: 16)")
     parser.add_argument("--imgsz", type=int, default=640, help="Image resolution (default: 640)")

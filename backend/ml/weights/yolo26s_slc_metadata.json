@@ -1,0 +1,37 @@
+{
+  "model_name": "YOLO26s-SAR-Vessel",
+  "model_architecture": "yolo26s",
+  "task": "detect",
+  "dataset_name": "OpenSAR Insight Sentinel-1 SLC",
+  "dataset_splits": {
+    "train": 2355,
+    "val": 269,
+    "test": 949
+  },
+  "classes": {
+    "0": "vessel"
+  },
+  "image_size": 640,
+  "epochs_completed": 37,
+  "best_epoch": null,
+  "batch_size": 16,
+  "optimizer": "auto",
+  "learning_rate": 0.001,
+  "mixed_precision": true,
+  "test_metrics": {
+    "precision": 0.5255,
+    "recall": 0.4164,
+    "map50": 0.3792,
+    "map50_95": 0.1284
+  },
+  "training_date": "2026-10-19T21:45:50.639420+00:00",
+  "git_commit": "maritime-operations-ai-kaggle-v1",
+  "hardware_info": {
+    "device": "0",
+    "cuda_available": true,
+    "gpu_name": "Tesla T4",
+    "cuda_version": "12.8",
+    "device_count": 2,
+    "vram_total_gb": 14.56
+  }
+}

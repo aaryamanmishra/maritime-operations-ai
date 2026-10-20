@@ -16,6 +16,7 @@ class SARTile:
         height: int,
         parent_width: int,
         parent_height: int,
+        modality: str = "GRD",
     ):
         self.tile_index = tile_index
         self.image_array = image_array  # uint8 (H, W, 3)
@@ -25,6 +26,7 @@ class SARTile:
         self.height = height
         self.parent_width = parent_width
         self.parent_height = parent_height
+        self.modality = modality.upper()
 
 
 class SARPreprocessor:
@@ -87,9 +89,10 @@ class SARPreprocessor:
 
         return stacked
 
-    def generate_tiles(self, scene_image: np.ndarray) -> list[SARTile]:
+    def generate_tiles(self, scene_image: np.ndarray, modality: str = "GRD") -> list[SARTile]:
         """
         Divide a scene image (H, W, 3) into overlapping tiles of size tile_size x tile_size.
+        Preserves image modality metadata on each tile.
         """
         h, w = scene_image.shape[:2]
         step = self.tile_size - self.tile_overlap
@@ -98,7 +101,7 @@ class SARPreprocessor:
             # Entire scene fits in one tile (or pad to tile_size)
             padded = np.zeros((self.tile_size, self.tile_size, 3), dtype=np.uint8)
             padded[:h, :w, :] = scene_image
-            return [SARTile(0, padded, 0, 0, w, h, w, h)]
+            return [SARTile(0, padded, 0, 0, w, h, w, h, modality=modality)]
 
         tiles: list[SARTile] = []
         tile_idx = 0
@@ -131,6 +134,7 @@ class SARPreprocessor:
                         height=min(self.tile_size, h - y_start),
                         parent_width=w,
                         parent_height=h,
+                        modality=modality,
                     )
                 )
                 tile_idx += 1
@@ -140,5 +144,94 @@ class SARPreprocessor:
             if y_end >= h:
                 break
 
-        logger.info("Generated %d tiles of size %dx%d from scene %dx%d", len(tiles), self.tile_size, self.tile_size, w, h)
+        logger.info(
+            "Generated %d %s tiles of size %dx%d from scene %dx%d",
+            len(tiles),
+            modality.upper(),
+            self.tile_size,
+            self.tile_size,
+            w,
+            h,
+        )
         return tiles
+
+
+class SLCSARPreprocessor(SARPreprocessor):
+    """
+    Dedicated Sentinel-1 Single Look Complex (SLC) preprocessor.
+    Faithfully reproduces the training pipeline used for YOLO26s SLC:
+    - Complex magnitude calculation: sqrt(real^2 + imag^2)
+    - Deterministic percentile contrast stretch: 2.0% to 99.5%
+    - Strict avoidance of logarithmic dB compression on SLC
+    - Multi-channel (VV, VH, (VV+VH)/2) stacking
+    """
+
+    def __init__(self, tile_size: int = 640, tile_overlap: int = 64):
+        super().__init__(tile_size=tile_size, tile_overlap=tile_overlap)
+
+    @staticmethod
+    def normalize_slc_band(
+        band: np.ndarray,
+        p_min: float = 2.0,
+        p_max: float = 99.5,
+    ) -> np.ndarray:
+        """
+        Normalize a raw SLC band (complex or float magnitude) into [0, 255] uint8.
+        Computes sqrt(real^2 + imag^2) if complex, followed by [p2, p99.5] percentile clipping.
+        """
+        if np.iscomplexobj(band):
+            # Complex amplitude magnitude sqrt(I^2 + Q^2)
+            mag = np.abs(band)
+        else:
+            mag = np.nan_to_num(band.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+
+        p2 = float(np.percentile(mag, p_min))
+        p99_5 = float(np.percentile(mag, p_max))
+        if p99_5 <= p2:
+            p99_5 = p2 + 1e-3
+
+        norm = np.clip((mag - p2) / (p99_5 - p2), 0.0, 1.0)
+        return (norm * 255.0).astype(np.uint8)
+
+    @classmethod
+    def decode_complex_slc_bytes(
+        cls,
+        file_bytes: bytes,
+        width: int = 512,
+        height: int = 512,
+    ) -> np.ndarray:
+        """
+        Decode raw SLC binary slice (complex64: float32 I + float32 Q per pixel)
+        into a normalized uint8 array matching OpenSAR SLC dataset decoder.
+        """
+        expected_bytes = width * height * 8
+        raw_slice = file_bytes[-expected_bytes:]
+        c_arr = np.frombuffer(raw_slice, dtype=np.complex64).reshape(height, width)
+        return cls.normalize_slc_band(c_arr)
+
+    def prepare_multichannel_slc(
+        self,
+        vv_band: np.ndarray,
+        vh_band: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """
+        Prepare a 3-channel (H, W, 3) uint8 image from SLC VV and optional VH bands.
+        Channel 0: VV (normalized complex magnitude)
+        Channel 1: VH (normalized complex magnitude)
+        Channel 2: Mean of VV and VH
+        """
+        vv_norm = self.normalize_slc_band(vv_band)
+
+        if vh_band is not None and vh_band.shape == vv_band.shape:
+            vh_norm = self.normalize_slc_band(vh_band)
+            avg_norm = ((vv_norm.astype(np.float32) + vh_norm.astype(np.float32)) / 2.0).astype(np.uint8)
+            stacked = np.stack([vv_norm, vh_norm, avg_norm], axis=-1)
+        else:
+            # Single-polarization fallback
+            stacked = np.stack([vv_norm, vv_norm, vv_norm], axis=-1)
+
+        return stacked
+
+    def generate_tiles(self, scene_image: np.ndarray, modality: str = "SLC") -> list[SARTile]:
+        """Generate tiles specifically tagged with SLC modality."""
+        return super().generate_tiles(scene_image, modality="SLC")

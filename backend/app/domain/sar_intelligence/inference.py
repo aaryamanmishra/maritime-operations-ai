@@ -63,50 +63,68 @@ class YOLO26sVesselDetector:
     """
     Single production inference boundary for YOLO26s SAR vessel detection.
     Strictly performs inference only — no automated retraining inside backend container.
+    Supports both GRD (default production) and SLC (opt-in) model checkpoints.
     """
 
     _instance: Optional["YOLO26sVesselDetector"] = None
+    _instances: dict[str, "YOLO26sVesselDetector"] = {}
 
-    def __init__(self, weights_path: str | None = None):
+    def __init__(self, weights_path: str | None = None, modality: str = "GRD"):
         settings = Settings()
-        self.weights_path = weights_path or settings.SAR_MODEL_WEIGHTS_PATH
+        self.modality = modality.upper()
+        
+        if self.modality == "SLC":
+            self.weights_path = weights_path or settings.SAR_SLC_MODEL_WEIGHTS_PATH
+            self.model_version = "yolo26s-opensar-slc-v1"
+            candidates = [
+                "backend/ml/weights/yolo26s_slc_vessel.pt",
+                "ml/weights/yolo26s_slc_vessel.pt",
+            ]
+            meta_candidates = [
+                os.path.join(os.path.dirname(self.weights_path), "yolo26s_slc_metadata.json"),
+                "backend/ml/weights/yolo26s_slc_metadata.json",
+                "ml/weights/yolo26s_slc_metadata.json",
+            ]
+        else:
+            self.weights_path = weights_path or settings.SAR_MODEL_WEIGHTS_PATH
+            self.model_version = "yolo26s-opensar-v1"
+            candidates = [
+                "backend/ml/weights/yolo26s_sar_vessel.pt",
+                "ml/weights/yolo26s_sar_vessel.pt",
+            ]
+            meta_candidates = [
+                os.path.join(os.path.dirname(self.weights_path), "yolo26s_metadata.json"),
+                "backend/ml/weights/yolo26s_metadata.json",
+                "ml/weights/yolo26s_metadata.json",
+            ]
+
         self.metadata: dict[str, Any] = {}
         self.model = None
-        self.model_version = "yolo26s-opensar-v1"
         self.task = "detect"
         self.num_classes = 1
         self.class_names = {0: "vessel"}
 
         # Resolve weights path across production candidates
         if not os.path.exists(self.weights_path):
-            candidates = [
-                "backend/ml/weights/yolo26s_sar_vessel.pt",
-                "ml/weights/yolo26s_sar_vessel.pt",
-            ]
             for cand in candidates:
                 if os.path.exists(cand):
                     self.weights_path = cand
                     break
 
         if not os.path.exists(self.weights_path):
-            logger.warning("YOLO26s production weights not found at %s", self.weights_path)
+            logger.warning("YOLO26s %s weights not found at %s", self.modality, self.weights_path)
             return
 
-        logger.info("Loading YOLO26s production vessel detector from %s", self.weights_path)
+        logger.info("Loading YOLO26s %s vessel detector from %s", self.modality, self.weights_path)
         self.model = YOLO(self.weights_path)
 
         # Load and verify model metadata
-        meta_candidates = [
-            os.path.join(os.path.dirname(self.weights_path), "yolo26s_metadata.json"),
-            "backend/ml/weights/yolo26s_metadata.json",
-            "ml/weights/yolo26s_metadata.json",
-        ]
         for m_path in meta_candidates:
             if os.path.exists(m_path):
                 try:
                     with open(m_path, "r", encoding="utf-8") as f:
                         self.metadata = json.load(f)
-                    logger.info("Loaded YOLO26s metadata from %s", m_path)
+                    logger.info("Loaded YOLO26s %s metadata from %s", self.modality, m_path)
                     break
                 except Exception as e:
                     logger.warning("Error reading metadata at %s: %s", m_path, e)
@@ -127,17 +145,23 @@ class YOLO26sVesselDetector:
             self.num_classes = len(self.class_names)
 
         logger.info(
-            "YOLO26s verified: task=%s, num_classes=%d, class_0=%s",
+            "YOLO26s %s verified: task=%s, num_classes=%d, class_0=%s",
+            self.modality,
             self.task,
             self.num_classes,
             self.class_names.get(0, "vessel"),
         )
 
     @classmethod
-    def get_instance(cls, weights_path: str | None = None) -> "YOLO26sVesselDetector":
-        if cls._instance is None:
-            cls._instance = cls(weights_path)
-        return cls._instance
+    def get_instance(cls, weights_path: str | None = None, modality: str = "GRD") -> "YOLO26sVesselDetector":
+        mod = modality.upper()
+        key = f"{mod}_{weights_path or 'default'}"
+        if key not in cls._instances:
+            detector = cls(weights_path=weights_path, modality=mod)
+            cls._instances[key] = detector
+            if mod == "GRD" and cls._instance is None:
+                cls._instance = detector
+        return cls._instances[key]
 
     def predict_single_tile(
         self,
@@ -191,6 +215,7 @@ class YOLO26sVesselDetector:
         parent_width: int,
         parent_height: int,
         confidence_threshold: float = 0.25,
+        scene_metadata: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Run inference across all preprocessed SAR tiles, remap bounding boxes to
@@ -198,7 +223,18 @@ class YOLO26sVesselDetector:
         Preserves source tile and scene metadata.
         """
         if not self.model:
-            raise RuntimeError(f"YOLO26s model not loaded. Weights file missing at {self.weights_path}")
+            raise RuntimeError(f"YOLO26s {self.modality} model not loaded. Weights file missing at {self.weights_path}")
+
+        # Guardrail: Check for modality mismatches between tiles and model
+        for tile in tiles:
+            tile_mod = getattr(tile, "modality", "GRD").upper()
+            if tile_mod != self.modality:
+                logger.warning(
+                    "Cross-modality warning: detector is '%s' but tile is tagged '%s'. "
+                    "GRD and SLC processing must remain strictly separated.",
+                    self.modality,
+                    tile_mod,
+                )
 
         raw_candidates: list[dict[str, Any]] = []
 
@@ -236,17 +272,31 @@ class YOLO26sVesselDetector:
             center_x = (s_xmin + s_xmax) / 2.0
             center_y = (s_ymin + s_ymax) / 2.0
 
-            lon, lat = SARGeoreferencer.pixel_to_lonlat_bilinear(
-                x=center_x,
-                y=center_y,
-                width=parent_width,
-                height=parent_height,
-                corner_coords=corner_coords,
-            )
+            if scene_metadata and "geolocation_grid_points" in scene_metadata and scene_metadata["geolocation_grid_points"]:
+                x_off = float(scene_metadata.get("crop_x_offset", 0.0))
+                y_off = float(scene_metadata.get("crop_y_offset", 0.0))
+                lon, lat = SARGeoreferencer.pixel_to_lonlat_grid(
+                    x=center_x,
+                    y=center_y,
+                    grid_points=scene_metadata["geolocation_grid_points"],
+                    x_offset=x_off,
+                    y_offset=y_off,
+                )
+            else:
+                lon, lat = SARGeoreferencer.pixel_to_lonlat_bilinear(
+                    x=center_x,
+                    y=center_y,
+                    width=parent_width,
+                    height=parent_height,
+                    corner_coords=corner_coords,
+                )
 
-            # Approximate vessel length in meters (assuming ~10m ground range resolution for S1 GRDH)
-            box_diag_px = ((s_xmax - s_xmin) ** 2 + (s_ymax - s_ymin) ** 2) ** 0.5
-            est_length_m = round(box_diag_px * 10.0, 1)
+            # Estimate vessel length using modality-specific sensor geometry
+            est_length_m = SARGeoreferencer.calculate_vessel_length(
+                bbox=cand["bbox"],
+                modality=self.modality,
+                metadata=scene_metadata,
+            )
 
             detection_id = f"sar-det-{uuid.uuid4().hex[:12]}"
             georeferenced.append({
@@ -269,6 +319,7 @@ class YOLO26sVesselDetector:
                     "y_offset": cand.get("tile_y_offset", 0),
                 },
                 "model_version": self.model_version,
+                "modality": self.modality,
                 "length_m": est_length_m,
                 "heading_deg": None,
             })

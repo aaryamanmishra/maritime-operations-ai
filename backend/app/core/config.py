@@ -64,14 +64,17 @@ class Settings(BaseSettings):
     CDSE_STAC_URL: str = "https://stac.dataspace.copernicus.eu/v1/"
     CDSE_TOKEN_URL: str = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
     CDSE_ODATA_URL: str = "https://catalogue.dataspace.copernicus.eu/odata/v1"
+    CDSE_ODATA_BURSTS_URL: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Bursts"
 
     # SAR Model & Correlation
     SAR_MODEL_WEIGHTS_PATH: str = "ml/weights/yolo26s_sar_vessel.pt"
+    SAR_SLC_MODEL_WEIGHTS_PATH: str = "backend/ml/weights/yolo26s_slc_vessel.pt"
+    SAR_DEFAULT_MODALITY: str = "GRD"
     SAR_CORRELATION_TIME_WINDOW_MINUTES: int = 15
     SAR_CORRELATION_DISTANCE_KM: float = 3.0
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",

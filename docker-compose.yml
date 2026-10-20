@@ -48,6 +48,8 @@ services:
       AIS_BBOX_MIN_LON: ${AIS_BBOX_MIN_LON:--2.0}
       AIS_BBOX_MAX_LAT: ${AIS_BBOX_MAX_LAT:-51.5}
       AIS_BBOX_MAX_LON: ${AIS_BBOX_MAX_LON:-2.5}
+      CDSE_USERNAME: ${CDSE_USERNAME:-}
+      CDSE_PASSWORD: ${CDSE_PASSWORD:-}
     volumes:
       - ./backend:/app
     ports:
@@ -82,6 +84,8 @@ services:
       AIS_BBOX_MIN_LON: ${AIS_BBOX_MIN_LON:--2.0}
       AIS_BBOX_MAX_LAT: ${AIS_BBOX_MAX_LAT:-51.5}
       AIS_BBOX_MAX_LON: ${AIS_BBOX_MAX_LON:-2.5}
+      CDSE_USERNAME: ${CDSE_USERNAME:-}
+      CDSE_PASSWORD: ${CDSE_PASSWORD:-}
     depends_on:
       backend:
         condition: service_healthy

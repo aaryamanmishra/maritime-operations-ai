@@ -1,73 +1,91 @@
-# YOLO26s SAR Vessel Detector — Kaggle GPU Training Package
+# Maritime Operations AI — Kaggle GPU Training Suite
 
-This directory contains the self-contained training package to train the **YOLO26s** SAR vessel detector on a free **NVIDIA Tesla T4 GPU** in Kaggle.
+This directory contains the autonomous training packages for the two ML core capabilities in Maritime Operations AI:
+1. **YOLO26s SAR Vessel Detector**: Spaceborne Sentinel-1 native Single Look Complex (SLC) satellite vessel detection.
+2. **Temporal Fusion Transformer (TFT) Vessel Performance Surrogate**: Deep-learning speed degradation surrogate under environmental wind, wave, and swell conditions.
+
+Both training scripts are **strictly CUDA-GPU enforced** to run on a free **NVIDIA Tesla T4 GPU** on Kaggle. Mac MPS or CPU training is blocked by project policy.
 
 ---
 
-## 1. Package Structure
+## 1. Directory Structure
 
 ```
 ml/kaggle/
-├── train_yolo26s.py          # Main autonomous training script (CUDA-enforced, mixed precision AMP)
-├── dataset_check.py          # Pre-flight audit, verification of 5-col labels, and GT visualization
-├── export_model.py           # Evaluation on held-out test set, prediction overlays, metadata export
-├── requirements.txt          # Python dependencies
-├── opensar_filtered.zip      # Complete pre-packaged OpenSAR dataset (36 MB)
-└── README.md                 # Step-by-step execution guide
+├── train_yolo26s.py              # YOLO26s Kaggle GPU training script (CUDA-enforced, AMP, radar augmentations)
+├── train_tft.py                  # Vessel Performance TFT Kaggle GPU training script (CUDA-enforced, AdamW)
+├── dataset_check.py              # Pre-flight audit, 5-col label format check, GT visualization
+├── export_model.py               # Evaluation on held-out test set, prediction overlays, metadata export
+├── requirements.txt              # Python dependencies
+├── opensar_slc_corrected.zip     # Active SAR Dataset: 3,573 native 512x512 SLC images (699 MB, zero hash leaks)
+└── README.md                     # Step-by-step Kaggle execution guide
 ```
 
 ---
 
-## 2. Dataset Specification
+## 2. ML Pipeline Audit Findings & Fixes Summary
 
-- **Source**: OpenSAR Insight Sentinel-1 GRD SAR Imagery
-- **Task**: Standard 2D Object Detection (`task: detect`)
-- **Classes**: Exactly 1 class: `0 = vessel`
-- **Label Format**: 5-column normalized YOLO format (`0 <x_center> <y_center> <width> <height>`)
-- **Preprocessing**: Contrast stretching (2nd to 99.5th percentile) applied to raw digital numbers, preserving high dynamic range radar backscatter without saturation or blanking.
-- **Dataset Split**:
-  - `train`: 203 images, 349 vessel annotations
-  - `val`: 13 images, 21 vessel annotations
-  - `test`: 100 images, 257 vessel annotations (strictly held out)
+### 2.1 TFT Vessel-Performance Pipeline Audit
+- **Target Leakage Findings**:
+  - No future trajectory variables (`fut_x`, `fut_y`, `fut_interp`) leak into historical feature sequences.
+  - Normalization statistics are strictly computed on the training split only (`compute_normalization_stats`).
+  - Vessel MMSIs are disjoint across splits (Train: 2,727 MMSIs, Val: 317 MMSIs, Test: 335 MMSIs).
+  - `met_wind_rel_heading_deg` is relative to historical course over ground (`last_cog`), not future heading.
+  - **Identified Autoregressive Shortcut**: Cruising vessels in open transit maintain nearly constant speed (median speed CV is 1.2%). As a result, historical speed (`hist_sog[-1]` and `mean_sog`) has a **0.989** correlation with future displacement speed (`target_sog = (fut_displacement_m / 1852.0) * 6.0`). Feeding `hist_displacement_m` and constant flags (`core_eligible=1.0`, `full_eligible=1.0`) into `vessel_stats` caused the model to learn a trivial identity shortcut rather than hydrodynamic resistance.
+- **Implemented Fixes**:
+  - Removed uninformative constant eligibility flags (`core_eligible`, `full_eligible`).
+  - Replaced the direct displacement shortcut with operational speed dynamics: `[mean_sog, min_sog, max_sog, std_sog]` over the observation window.
+  - Created a dedicated, standalone Kaggle GPU training script (`ml/kaggle/train_tft.py`) with CUDA enforcement, early stopping, and automatic held-out test evaluation.
+
+### 2.2 YOLO26s SAR Native SLC Dataset Architecture & Audit
+- **Why Native SLC Replaced GRD**:
+  - Source OpenSAR XML `<BoundingBox>` annotations are defined exclusively in the $512 \times 512$ SLC radar frame (`Scene_Sample`, `Scene_Line`).
+  - GRD patches have non-square, variable dimensions (e.g. $203 \times 814$, $203 \times 1334$) and suffer from swath boundary truncation. Attempting to linearly stretch $512 \times 512$ coordinates onto truncated GRD rasters caused bounding-box errors of up to $288\text{ pixels}$.
+  - The active dataset was rebuilt directly from native Sentinel-1 $512 \times 512$ SLC complex float32 rasters (`_SLC_VV.tiff`, `_SLC_VH.tiff`). Magnitude calculation $|I + j Q|$ and deterministic 2nd-to-99.5th percentile contrast stretching produces true 1:1, pixel-exact registration.
+- **Confidence Filtering & Hard Negatives**:
+  - Unreliable annotations marked `<Confidence>LOW</Confidence>` (underway moving vessels with 20–40 pixel Doppler azimuth shifts relative to uncorrected AIS, such as `DB_OPENSAR_VD_109`) are completely excluded from the dataset (never converted to background negatives) to avoid penalizing the model for detecting unannotated vessels.
+  - Clean ocean patches ($Number\_of\_ships = 0$) are fully preserved as hard negatives (2,120 background images) to suppress sea-clutter false alarms.
+  - Cross-split duplicate image hashes were audited; 1 duplicate background patch in train matching test was purged.
+- **Exclusion & Reconciliation Bookkeeping**:
+  - Source archive patches: **4,047** (2,671 train, 311 val, 1,065 test).
+  - Low-confidence / misaligned patch exclusions: **473** (315 train, 42 val, 116 test).
+  - Additional cross-split duplicate removed from training: **1** (`DB_OPENSAR_VD_5875`).
+  - Total excluded patches: **474** ($473 + 1$).
+  - Final dataset image count: **3,573** ($4,047 - 474$).
+- **Final Active Dataset Composition**:
+  - **Train**: 2,355 images (951 vessel, 1,404 background), 2,084 valid vessel annotations.
+  - **Validation**: 269 images (108 vessel, 161 background), 197 valid vessel annotations.
+  - **Held-Out Test**: 949 images (394 vessel, 555 background), 1,220 valid vessel annotations.
+  - **Total**: 3,573 images ($2,355 + 269 + 949$), 3,501 valid vessel annotations, 0 format errors, 0 cross-split hash leaks.
 
 ---
 
-## 3. Step-by-Step Kaggle Setup Guide
+## 3. Step-by-Step Kaggle GPU Execution Guide
 
-### Step 1: Create a Kaggle Notebook
-1. Open [Kaggle](https://www.kaggle.com/) and click **Create** -> **New Notebook**.
+### Option 1: Training YOLO26s SAR Vessel Detector on Kaggle GPU
+
+#### Step 1: Create a Kaggle Notebook
+1. Go to [Kaggle](https://www.kaggle.com/) and click **Create** -> **New Notebook**.
 2. Name the notebook: `maritime-yolo26s-sar-training`.
 
-### Step 2: Enable GPU Accelerator
-1. In the right-hand panel under **Notebook options** / **Settings**:
-   - Set **Accelerator** to **GPU T4 x1** (or **GPU T4 x2**).
-   - Verify that **Internet** is toggled **ON** (required to download base weights `yolo26s.pt` and dependencies).
+#### Step 2: Enable GPU Accelerator
+1. In the right sidebar under **Notebook options**:
+   - Set **Accelerator** to **GPU T4 x1**.
+   - Ensure **Internet** is toggled **ON** (needed for Ultralytics base weights and dependencies).
 
-### Step 3: Provide the Dataset & Scripts
+#### Step 3: Upload the Code & Dataset
+1. Go to **Datasets** -> **New Dataset** -> Upload `ml/kaggle/opensar_slc_corrected.zip` (named `opensar-slc-corrected`).
+2. Attach it to your notebook (mounted at `/kaggle/input/opensar-slc-corrected/opensar_slc_corrected` or root).
+3. Upload `train_yolo26s.py`, `dataset_check.py`, `export_model.py`, and `requirements.txt` to the notebook root.
 
-#### Option A: Upload as a Kaggle Dataset (Recommended)
-1. Go to **Datasets** -> **New Dataset**.
-2. Upload `ml/kaggle/opensar_filtered.zip`.
-3. Set the title as `opensar-detection`.
-4. In your notebook, click **+ Add Input** and attach `opensar-detection`.
-   - The dataset will be mounted at `/kaggle/input/opensar-detection/opensar_filtered`.
+#### Step 4: Run Notebook Cells
 
-#### Option B: Direct Upload via Notebook File Browser or Curl
-Upload `opensar_filtered.zip`, `train_yolo26s.py`, `dataset_check.py`, and `export_model.py` directly to the `/kaggle/working/` workspace.
-
----
-
-## 4. Notebook Execution Cells
-
-Run the following cells sequentially in your Kaggle notebook:
-
-### Cell 1: Environment Setup
-```python
-# Install required dependencies
+**Cell 1: Environment Setup**
+```bash
 !pip install -q -r requirements.txt || pip install -q ultralytics pyyaml pillow matplotlib
 ```
 
-### Cell 2: Verify GPU Environment
+**Cell 2: Verify GPU**
 ```python
 import torch
 print("CUDA Available:", torch.cuda.is_available())
@@ -78,30 +96,15 @@ else:
     raise RuntimeError("Please enable GPU accelerator (GPU T4) in notebook settings!")
 ```
 
-### Cell 3: Dataset Unpack (if using zip)
-```python
-import os, zipfile
-
-if not os.path.exists("opensar_filtered"):
-    if os.path.exists("/kaggle/input/opensar-detection/opensar_filtered"):
-        print("Using attached Kaggle dataset.")
-    elif os.path.exists("opensar_filtered.zip"):
-        print("Unzipping local opensar_filtered.zip...")
-        with zipfile.ZipFile("opensar_filtered.zip", "r") as zf:
-            zf.extractall(".")
+**Cell 3: Automatic Dataset Resolution & Pre-Flight Audit**
+```bash
+# dataset_check automatically locates the dataset directory or extracts opensar_slc_corrected.zip if uncompressed
+!python dataset_check.py --output-yaml dataset_run.yaml --vis-dir ground_truth_samples
 ```
 
-### Cell 4: Pre-Flight Dataset Audit
-```python
-# Run data audit and generate ground-truth diagnostic visualizations
-!python dataset_check.py --data-dir opensar_filtered --output-yaml dataset_run.yaml --vis-dir ground_truth_samples
-```
-
-### Cell 5: Run YOLO26s Training
-```python
-# Launch training on NVIDIA Tesla T4 with mixed precision FP16 and radar augmentations
+**Cell 4: Launch YOLO26s Training on CUDA GPU**
+```bash
 !python train_yolo26s.py \
-    --data-dir opensar_filtered \
     --epochs 150 \
     --batch-size 16 \
     --imgsz 640 \
@@ -111,46 +114,76 @@ if not os.path.exists("opensar_filtered"):
     --export-dir export
 ```
 
-### Cell 6: Inspect Test Metrics & Download Artifacts
+**Cell 5: Download Artifacts**
 ```python
-import json
-with open("export/yolo26s_metadata.json", "r") as f:
-    meta = json.load(f)
-
-print("=== HELD-OUT TEST METRICS ===")
-for k, v in meta["test_metrics"].items():
-    print(f"  {k}: {v}")
-
-# File link for downloading artifacts
 from IPython.display import FileLink
 FileLink("yolo26s_kaggle_artifacts.zip")
 ```
 
 ---
 
-## 5. Generated Artifacts
+### Option 2: Training Vessel Performance TFT on Kaggle GPU
 
-Upon completion, `yolo26s_kaggle_artifacts.zip` will contain:
-1. `best.pt`: Best checkpoint based on validation loss and mAP50.
-2. `last.pt`: Final checkpoint.
-3. `predictions/`: Prediction overlay visualizations on held-out test images.
-4. `yolo26s_metadata.json`: Full training provenance, parameters, hardware info, and held-out test metrics.
+#### Step 1: Create a Kaggle Notebook
+1. Create a new notebook named: `maritime-tft-performance-training`.
+2. Set **Accelerator** to **GPU T4 x1** in the right sidebar.
+
+#### Step 2: Upload NOAA Track A Dataset
+1. Zip `data/training/noaa_track_v1/` and upload to Kaggle as a dataset named `noaa-track-v1`.
+2. Attach it to your notebook (available at `/kaggle/input/noaa-track-v1/noaa_track_v1`).
+3. Upload `train_tft.py` to `/kaggle/working/`.
+
+#### Step 3: Run Notebook Cells
+
+**Cell 1: Environment Setup**
+```bash
+!pip install -q torch numpy
+```
+
+**Cell 2: Verify GPU**
+```python
+import torch
+assert torch.cuda.is_available(), "CUDA GPU required! Enable GPU T4 in settings."
+print("GPU:", torch.cuda.get_device_name(0))
+```
+
+**Cell 3: Launch TFT Training**
+```bash
+!python train_tft.py \
+    --data-dir /kaggle/input/noaa-track-v1 \
+    --epochs 35 \
+    --batch-size 128 \
+    --lr 0.001 \
+    --patience 6 \
+    --export-dir export_tft
+```
+
+**Cell 4: Download Artifacts**
+```python
+from IPython.display import FileLink
+FileLink("tft_kaggle_artifacts.zip")
+```
 
 ---
 
-## 6. Local Integration
+## 4. Local Deployment of Trained Artifacts
 
-Once downloaded to your development machine:
-1. Copy `best.pt` to:
+Once training completes on Kaggle and artifacts are downloaded:
+
+### Integrating YOLO26s:
+1. Unzip `yolo26s_kaggle_artifacts.zip`.
+2. Copy `best.pt` to:
    - `ml/weights/yolo26s_sar_vessel.pt`
    - `backend/ml/weights/yolo26s_sar_vessel.pt`
-2. Copy `yolo26s_metadata.json` to:
+3. Copy `yolo26s_metadata.json` to:
+   - `ml/weights/yolo26s_metadata.json`
    - `backend/ml/weights/yolo26s_metadata.json`
-3. Restart the backend container:
-   ```bash
-   docker compose restart backend
-   ```
-4. Verify the model endpoint:
-   ```bash
-   curl -s http://localhost:8000/api/v1/sar/model/status | jq .
-   ```
+
+### Integrating TFT:
+1. Unzip `tft_kaggle_artifacts.zip`.
+2. Copy `tft_vessel_performance.pt` to:
+   - `ml/weights/tft_vessel_performance.pt`
+   - `backend/ml/weights/tft_vessel_performance.pt`
+3. Copy `tft_metadata.json` to:
+   - `ml/weights/tft_metadata.json`
+   - `backend/ml/weights/tft_metadata.json`

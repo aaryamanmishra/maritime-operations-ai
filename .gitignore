@@ -72,3 +72,9 @@ data/diagnostics/
 
 # Training runs
 runs/
+.sar_s3_session.json
+
+# SAR Cache & Local Burst Artifacts
+data/sar_cache/
+backend/data/sar_cache/
+artifacts/

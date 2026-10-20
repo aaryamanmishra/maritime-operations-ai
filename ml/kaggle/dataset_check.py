@@ -29,47 +29,122 @@ logging.basicConfig(
 )
 logger = logging.getLogger("dataset_check")
 
-# Candidate search directories in priority order
+# Candidate search directories in priority order for extracted dataset
 CANDIDATE_DATASET_DIRS = [
     # Kaggle input paths
-    "/kaggle/input/opensar-detection/opensar_filtered",
-    "/kaggle/input/opensar-filtered/opensar_filtered",
-    "/kaggle/input/opensar-detection",
-    "/kaggle/input/opensar_filtered",
+    "/kaggle/input/opensar-slc-corrected/opensar_slc_corrected",
+    "/kaggle/input/opensar-slc-corrected",
+    "/kaggle/input/opensar_slc_corrected",
+    "/kaggle/input/opensar-detection/opensar_slc_corrected",
     # Kaggle working paths
-    "/kaggle/working/opensar_filtered",
-    "/kaggle/working/data/opensar_filtered",
+    "/kaggle/working/opensar_slc_corrected",
+    "/kaggle/working/data/opensar_slc_corrected",
+    # Current directory
+    "opensar_slc_corrected",
     # Local repository paths
-    "data/processed/opensar_filtered",
-    "../data/processed/opensar_filtered",
-    "../../data/processed/opensar_filtered",
+    "data/processed/opensar_slc",
+    "../data/processed/opensar_slc",
+    "../../data/processed/opensar_slc",
+]
+
+# Candidate search locations for dataset zip archive
+CANDIDATE_ZIP_PATHS = [
+    "/kaggle/input/opensar-slc-corrected/opensar_slc_corrected.zip",
+    "/kaggle/input/opensar_slc_corrected/opensar_slc_corrected.zip",
+    "/kaggle/working/opensar_slc_corrected.zip",
+    "opensar_slc_corrected.zip",
+    "ml/kaggle/opensar_slc_corrected.zip",
+    "../ml/kaggle/opensar_slc_corrected.zip",
+    "../../ml/kaggle/opensar_slc_corrected.zip",
 ]
 
 
-def find_dataset_dir(explicit_dir: Optional[str] = None) -> str:
-    """Locate the OpenSAR dataset root directory."""
-    if explicit_dir and os.path.isdir(explicit_dir):
-        logger.info("Using explicitly provided dataset directory: %s", explicit_dir)
-        return os.path.abspath(explicit_dir)
+def extract_dataset_zip(zip_path: str, target_dir: Optional[str] = None) -> str:
+    """Extract opensar_slc_corrected.zip and return the unzipped dataset root path."""
+    import zipfile
 
+    if not os.path.isfile(zip_path):
+        raise FileNotFoundError(f"ZIP file not found: {zip_path}")
+
+    # Determine extract target directory
+    if target_dir is None:
+        if os.path.isdir("/kaggle/working") and os.access("/kaggle/working", os.W_OK):
+            target_dir = "/kaggle/working"
+        else:
+            target_dir = "."
+
+    logger.info("Extracting dataset archive %s to %s ...", zip_path, target_dir)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(target_dir)
+
+    expected_root = os.path.join(target_dir, "opensar_slc_corrected")
+    if os.path.isdir(os.path.join(expected_root, "images", "train")):
+        logger.info("Successfully extracted dataset to: %s", os.path.abspath(expected_root))
+        return os.path.abspath(expected_root)
+
+    if os.path.isdir(os.path.join(target_dir, "images", "train")):
+        logger.info("Successfully extracted dataset to: %s", os.path.abspath(target_dir))
+        return os.path.abspath(target_dir)
+
+    raise RuntimeError(
+        f"Extraction succeeded, but images/train was not found under {expected_root} or {target_dir}."
+    )
+
+
+def find_dataset_dir(explicit_dir: Optional[str] = None) -> str:
+    """Locate or unpack the OpenSAR SLC dataset root directory."""
+    # 1. If explicit path is provided, check if it is a directory or a zip file
+    if explicit_dir:
+        if os.path.isfile(explicit_dir) and explicit_dir.lower().endswith(".zip"):
+            logger.info("Explicit path is a zip file. Extracting: %s", explicit_dir)
+            return extract_dataset_zip(explicit_dir)
+
+        if os.path.isdir(explicit_dir):
+            if os.path.isdir(os.path.join(explicit_dir, "images", "train")):
+                logger.info("Using explicitly provided dataset directory: %s", explicit_dir)
+                return os.path.abspath(explicit_dir)
+            if os.path.isdir(os.path.join(explicit_dir, "opensar_slc_corrected", "images", "train")):
+                nested = os.path.join(explicit_dir, "opensar_slc_corrected")
+                logger.info("Found dataset in subfolder: %s", nested)
+                return os.path.abspath(nested)
+
+    # 2. Check candidate directories for pre-extracted dataset
     for path in CANDIDATE_DATASET_DIRS:
         if os.path.isdir(path):
-            # Check if this directory directly has images/train or contains a child with it
             if os.path.isdir(os.path.join(path, "images", "train")):
                 logger.info("Found OpenSAR dataset at: %s", os.path.abspath(path))
                 return os.path.abspath(path)
+            if os.path.isdir(os.path.join(path, "opensar_slc_corrected", "images", "train")):
+                nested = os.path.join(path, "opensar_slc_corrected")
+                logger.info("Found OpenSAR dataset at: %s", os.path.abspath(nested))
+                return os.path.abspath(nested)
 
-    # Glob search in /kaggle/input if running on Kaggle
+    # 3. Glob search for images/train in /kaggle/input if running on Kaggle
     if os.path.isdir("/kaggle/input"):
         for sub in glob.glob("/kaggle/input/**/images/train", recursive=True):
             parent = os.path.dirname(os.path.dirname(sub))
             logger.info("Discovered OpenSAR dataset via Kaggle input scan: %s", parent)
             return os.path.abspath(parent)
 
+    # 4. If directory was not found, check candidate ZIP archives and extract
+    for zip_candidate in CANDIDATE_ZIP_PATHS:
+        if os.path.isfile(zip_candidate):
+            logger.info("Located unextracted dataset archive at: %s", zip_candidate)
+            return extract_dataset_zip(zip_candidate)
+
+    # 5. Glob search for opensar*slc*.zip in /kaggle/input
+    if os.path.isdir("/kaggle/input"):
+        for sub_zip in glob.glob("/kaggle/input/**/*.zip", recursive=True):
+            if "opensar" in os.path.basename(sub_zip).lower():
+                logger.info("Discovered dataset archive via Kaggle input scan: %s", sub_zip)
+                return extract_dataset_zip(sub_zip)
+
     raise FileNotFoundError(
-        "Could not locate the OpenSAR dataset directory. Looked in:\n  - "
+        "Could not locate the OpenSAR SLC dataset directory or archive. Looked in:\n  - "
         + "\n  - ".join(CANDIDATE_DATASET_DIRS)
-        + "\n\nPlease supply --data-dir pointing to the unzipped opensar_filtered folder."
+        + "\nCandidate zip archives checked:\n  - "
+        + "\n  - ".join(CANDIDATE_ZIP_PATHS)
+        + "\n\nPlease supply --data-dir pointing to opensar_slc_corrected or opensar_slc_corrected.zip."
     )
 
 
@@ -292,7 +367,7 @@ def run_dataset_check(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Audit OpenSAR detection dataset for YOLO26s.")
-    parser.add_argument("--data-dir", type=str, default=None, help="Path to opensar_filtered dataset root")
+    parser.add_argument("--data-dir", type=str, default=None, help="Path to opensar_slc_corrected dataset root or archive")
     parser.add_argument("--output-yaml", type=str, default="dataset_run.yaml", help="Path to save generated dataset YAML")
     parser.add_argument("--vis-dir", type=str, default="ground_truth_samples", help="Path to save ground truth samples")
     args = parser.parse_args()

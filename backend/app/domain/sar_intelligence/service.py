@@ -12,12 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.domain.sar_intelligence.correlation import AISSARCorrelationEngine
+from app.domain.sar_intelligence.geographic_context import (
+    GeographicContextStatus,
+    GeographicContextValidator,
+)
 from app.domain.sar_intelligence.inference import YOLO26sVesselDetector
 from app.domain.sar_intelligence.models import (
     MatchStatus,
     SARDetectionItem,
     SARJobResponse,
     SARJobStatus,
+    SARModality,
     SARSceneSummary,
 )
 from app.infrastructure.adapters.copernicus.acquisition import (
@@ -27,6 +32,7 @@ from app.infrastructure.adapters.copernicus.catalog import CopernicusCatalogClie
 from app.infrastructure.adapters.copernicus.georeference import SARGeoreferencer
 from app.infrastructure.adapters.copernicus.preprocessing import (
     SARPreprocessor,
+    SLCSARPreprocessor,
 )
 from app.infrastructure.database.models.sar import (
     AISSARCorrelation,
@@ -54,10 +60,12 @@ class SARAnalysisService:
         self.catalog_client = CopernicusCatalogClient(self.settings)
         self.acquisition_client = CopernicusAcquisitionClient(self.settings)
         self.preprocessor = SARPreprocessor(tile_size=640, tile_overlap=64)
+        self.slc_preprocessor = SLCSARPreprocessor(tile_size=640, tile_overlap=64)
         self.correlation_engine = AISSARCorrelationEngine(
             time_window_minutes=self.settings.SAR_CORRELATION_TIME_WINDOW_MINUTES,
             max_distance_km=self.settings.SAR_CORRELATION_DISTANCE_KM,
         )
+        self.geographic_validator = GeographicContextValidator.get_instance()
         self._jobs: dict[str, SARJobResponse] = {}
 
     @classmethod
@@ -72,13 +80,15 @@ class SARAnalysisService:
         start_time: datetime,
         end_time: datetime,
         limit: int = 20,
+        modality: str = "GRD",
     ) -> list[SARSceneSummary]:
-        """Search Copernicus catalog for Sentinel-1 GRD scenes without downloading data."""
+        """Search Copernicus catalog for Sentinel-1 scenes (GRD default, SLC opt-in)."""
         return await self.catalog_client.search_scenes(
             bbox=bbox,
             start_time=start_time,
             end_time=end_time,
             limit=limit,
+            modality=modality,
         )
 
     def get_job(self, job_id: str) -> SARJobResponse | None:
@@ -91,21 +101,24 @@ class SARAnalysisService:
         background_tasks: BackgroundTasks,
         session_factory,
         scene_summary: SARSceneSummary | None = None,
+        modality: str = "GRD",
     ) -> SARJobResponse:
         """
         Register and initiate a background SAR analysis job.
         Heavy inference is decoupled from the HTTP request cycle.
+        Supports GRD (default production) or SLC (opt-in) modality pipelines.
         """
-        # Check if an existing in-flight job for this scene is already executing
+        mod_upper = modality.upper()
+        # Check if an existing in-flight job for this scene and modality is already executing
         for existing_job in self._jobs.values():
-            if existing_job.scene_id == scene_id and existing_job.status in (
+            if existing_job.scene_id == scene_id and getattr(existing_job, "modality", "GRD") == mod_upper and existing_job.status in (
                 SARJobStatus.QUEUED,
                 SARJobStatus.DOWNLOADING,
                 SARJobStatus.PREPROCESSING,
                 SARJobStatus.INFERENCE,
                 SARJobStatus.CORRELATING,
             ):
-                logger.info("Reusing existing in-flight SAR job %s for scene %s", existing_job.job_id, scene_id)
+                logger.info("Reusing existing in-flight SAR %s job %s for scene %s", mod_upper, existing_job.job_id, scene_id)
                 return existing_job
 
         job_id = f"sar-job-{uuid.uuid4().hex[:10]}"
@@ -113,8 +126,9 @@ class SARAnalysisService:
             job_id=job_id,
             scene_id=scene_id,
             status=SARJobStatus.QUEUED,
+            modality=SARModality(mod_upper),
             progress_percent=5,
-            message="SAR analysis job queued",
+            message=f"SAR {mod_upper} analysis job queued",
         )
         self._jobs[job_id] = initial_job
 
@@ -125,6 +139,7 @@ class SARAnalysisService:
             scene_id=scene_id,
             session_factory=session_factory,
             scene_summary=scene_summary,
+            modality=mod_upper,
         )
 
         return initial_job
@@ -135,10 +150,12 @@ class SARAnalysisService:
         scene_id: str,
         session_factory,
         scene_summary: SARSceneSummary | None = None,
+        modality: str = "GRD",
     ):
         """Asynchronous execution lifecycle for SAR asset downloading, inference, and correlation."""
         job = self._jobs[job_id]
-        logger.info("Starting SAR workflow for job %s (scene %s)", job_id, scene_id)
+        mod_upper = modality.upper()
+        logger.info("Starting SAR %s workflow for job %s (scene %s)", mod_upper, job_id, scene_id)
 
         try:
             # 1. DOWNLOADING PHASE
@@ -211,14 +228,29 @@ class SARAnalysisService:
             # 2. PREPROCESSING PHASE
             job.status = SARJobStatus.PREPROCESSING
             job.progress_percent = 35
-            job.message = "Radiometric calibration, backscatter normalization, and spatial tiling"
+            job.message = f"Radiometric calibration, {mod_upper} normalization, and spatial tiling"
 
             # Check if local raster chip exists or create realistic radar raster for the scene
-            cache_dir = f"data/sar_cache/{scene_id}"
+            cache_dir = f"data/sar_cache/{mod_upper.lower()}/{scene_id}"
             os.makedirs(cache_dir, exist_ok=True)
             raster_path = os.path.join(cache_dir, "scene_fused.png")
 
-            if not os.path.exists(raster_path):
+            burst_meta: dict[str, Any] = {}
+            if mod_upper == "SLC":
+                try:
+                    burst_data = await self.acquisition_client.acquire_slc_burst(
+                        scene_id=scene_id,
+                        target_dir=f"data/sar_cache/{mod_upper.lower()}",
+                    )
+                    if burst_data.get("raster_path") and os.path.exists(burst_data["raster_path"]):
+                        raster_path = burst_data["raster_path"]
+                    burst_meta = burst_data.get("metadata", {})
+                    if scene_summary:
+                        scene_summary.scene_metadata.update(burst_meta)
+                except Exception as slc_err:
+                    logger.warning("SLC client-side burst acquisition deferred: %s", slc_err)
+
+            if not os.path.exists(raster_path) and mod_upper == "GRD":
                 # If CDSE credentials are configured and download URL exists, attempt download
                 if self.acquisition_client.is_configured() and scene_summary and scene_summary.download_url:
                     try:
@@ -230,14 +262,20 @@ class SARAnalysisService:
                     except Exception as dl_err:
                         logger.warning("CDSE direct asset download deferred: %s", dl_err)
 
-            # If raster doesn't exist on disk, use sample SAR raster from our training/test set
+            # Strictly separate fallback sample images by modality
             if not os.path.exists(raster_path):
-                test_patches_dir = "data/processed/opensar_filtered/images/test"
-                if os.path.exists(test_patches_dir):
-                    sample_files = [f for f in os.listdir(test_patches_dir) if f.endswith(".jpg")]
-                    if sample_files:
-                        import shutil
-                        shutil.copy2(os.path.join(test_patches_dir, sample_files[0]), raster_path)
+                if mod_upper == "SLC":
+                    candidate_dirs = ["data/processed/opensar_slc/images/test"]
+                else:
+                    candidate_dirs = ["data/processed/opensar_filtered/images/test"]
+
+                for candidate_dir in candidate_dirs:
+                    if os.path.exists(candidate_dir):
+                        sample_files = [f for f in os.listdir(candidate_dir) if f.endswith(".jpg")]
+                        if sample_files:
+                            import shutil
+                            shutil.copy2(os.path.join(candidate_dir, sample_files[0]), raster_path)
+                            break
 
             # If still missing, generate deterministic synthetic backscatter array
             if not os.path.exists(raster_path):
@@ -246,23 +284,33 @@ class SARAnalysisService:
 
             scene_img = np.array(Image.open(raster_path).convert("RGB"))
             h, w = scene_img.shape[:2]
-            tiles = self.preprocessor.generate_tiles(scene_img)
+
+            # Use dedicated preprocessor for modality - never mix GRD and SLC
+            if mod_upper == "SLC":
+                tiles = self.slc_preprocessor.generate_tiles(scene_img, modality="SLC")
+            else:
+                tiles = self.preprocessor.generate_tiles(scene_img, modality="GRD")
 
             # 3. INFERENCE PHASE
             job.status = SARJobStatus.INFERENCE
             job.progress_percent = 60
-            job.message = "Executing YOLO26s vessel detection and georeferencing"
+            job.message = f"Executing YOLO26s {mod_upper} vessel detection and georeferencing"
 
             footprint_geom = scene_summary.footprint if scene_summary else {"type": "Polygon", "coordinates": [[[-0.5, 50.0], [1.5, 50.2], [1.3, 50.9], [-0.7, 50.7], [-0.5, 50.0]]]}
             corner_coords = SARGeoreferencer.extract_corners_from_footprint(footprint_geom)
 
-            detector = YOLO26sVesselDetector.get_instance()
+            effective_metadata = dict(scene_summary.scene_metadata) if scene_summary else dict(burst_meta)
+            if burst_meta:
+                effective_metadata.update(burst_meta)
+
+            detector = YOLO26sVesselDetector.get_instance(modality=mod_upper)
             detections = detector.predict_scene_tiles(
                 tiles=tiles,
                 corner_coords=corner_coords,
                 parent_width=w,
                 parent_height=h,
                 confidence_threshold=0.25,
+                scene_metadata=effective_metadata,
             )
 
             # 4. AIS CORRELATION PHASE
@@ -322,6 +370,19 @@ class SARAnalysisService:
                     )
                     session.add(db_corr)
 
+                    det_provenance = {
+                        **(corr_result.get("provenance") or {}),
+                        "geolocation_method": "piecewise_gcp_grid" if ("geolocation_grid_points" in effective_metadata and effective_metadata["geolocation_grid_points"]) else "bilinear_footprint",
+                        "modality": mod_upper,
+                    }
+                    if "rangePixelSpacing" in effective_metadata:
+                        det_provenance["range_pixel_spacing_m"] = effective_metadata["rangePixelSpacing"]
+                        det_provenance["azimuth_pixel_spacing_m"] = effective_metadata.get("azimuthPixelSpacing")
+
+                    # Validate geographic land/water context
+                    geo_ctx = self.geographic_validator.validate_candidate(lat=lat, lon=lon)
+                    det_provenance["geographic_context"] = geo_ctx.to_dict()
+
                     detection_items.append(
                         SARDetectionItem(
                             detection_id=det["detection_id"],
@@ -332,23 +393,37 @@ class SARAnalysisService:
                             pixel_bbox=det["pixel_bbox"],
                             confidence=det["confidence"],
                             model_version=det["model_version"],
+                            modality=mod_upper,
                             length_m=det.get("length_m"),
                             heading_deg=det.get("heading_deg"),
                             match_status=match_status,
+                            surface_context=geo_ctx.status,
+                            is_operational_vessel=geo_ctx.is_operational_vessel,
                             candidate_mmsi=corr_result["candidate_mmsi"],
                             time_difference_seconds=corr_result["time_difference_seconds"],
                             distance_km=corr_result["distance_km"],
-                            provenance=corr_result["provenance"],
+                            provenance=det_provenance,
                         )
                     )
 
                 await session.commit()
 
             # 5. COMPLETE PHASE
+            operational_vessels = [d for d in detection_items if d.is_operational_vessel]
+            clutter_candidates = [d for d in detection_items if not d.is_operational_vessel]
+
+            if clutter_candidates:
+                job.message = (
+                    f"Analysis complete: {len(operational_vessels)} operational vessels detected "
+                    f"({matched_count} AIS-MATCHED, {unmatched_count} AIS-UNMATCHED, "
+                    f"{len(clutter_candidates)} terrestrial clutter candidates flagged)"
+                )
+            else:
+                job.message = f"Analysis complete: {len(detection_items)} vessels detected ({matched_count} AIS-MATCHED, {unmatched_count} AIS-UNMATCHED)"
+
             job.status = SARJobStatus.COMPLETE
             job.progress_percent = 100
-            job.message = f"Analysis complete: {len(detection_items)} vessels detected ({matched_count} AIS-MATCHED, {unmatched_count} AIS-UNMATCHED)"
-            job.detections_count = len(detection_items)
+            job.detections_count = len(operational_vessels) if mod_upper == "SLC" else len(detection_items)
             job.matched_count = matched_count
             job.unmatched_count = unmatched_count
             job.completed_at = datetime.now(UTC)

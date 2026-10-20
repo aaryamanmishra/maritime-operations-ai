@@ -395,25 +395,62 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
         filter: ['==', ['get', 'isSelected'], true],
         paint: {
           'circle-radius': 16,
-          'circle-color': '#c084fc',
+          'circle-color': [
+            'case',
+            ['==', ['get', 'is_operational'], false],
+            '#f43f5e',
+            '#c084fc'
+          ],
           'circle-opacity': 0.45,
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#c084fc',
+          'circle-stroke-color': [
+            'case',
+            ['==', ['get', 'is_operational'], false],
+            '#f43f5e',
+            '#c084fc'
+          ],
         },
       });
+      // Operational vessel contacts (AIS-matched & unmatched dark vessels)
       map.addLayer({
         id: 'sar-detections-circle',
         type: 'circle',
         source: 'sar-detections-source',
+        filter: ['==', ['get', 'is_operational'], true],
         paint: {
           'circle-radius': 8,
           'circle-color': [
             'case',
-            ['==', ['get', 'match_status'], 'AIS-MATCHED'], '#10b981',
+            ['==', ['get', 'match_status'], 'AIS-MATCHED'],
+            '#10b981',
             '#f59e0b'
           ],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': [
+            'case',
+            ['==', ['get', 'surface_context'], 'AMBIGUOUS_COASTAL'],
+            3,
+            2
+          ],
+          'circle-stroke-color': [
+            'case',
+            ['==', ['get', 'surface_context'], 'AMBIGUOUS_COASTAL'],
+            '#f97316',
+            '#ffffff'
+          ],
+        },
+      });
+      // Rejected terrestrial clutter diagnostic layer (clearly distinct from vessels)
+      map.addLayer({
+        id: 'sar-clutter-circle',
+        type: 'circle',
+        source: 'sar-detections-source',
+        filter: ['==', ['get', 'is_operational'], false],
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#475569',
+          'circle-opacity': 0.7,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#f43f5e',
         },
       });
 
@@ -481,6 +518,16 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
         }
       });
 
+      // Click on rejected clutter marker
+      map.on('click', 'sar-clutter-circle', (e: any) => {
+        if (!e.features || !e.features[0]) return;
+        const detId = e.features[0].properties?.detection_id;
+        const found = sarDetectionsRef.current.find((d) => d.detection_id === detId);
+        if (found) {
+          onSelectDetectionRef.current?.(found);
+        }
+      });
+
       map.on('mouseenter', 'sar-detections-circle', () => {
         if (!activePickingModeRef.current) {
           map.getCanvas().style.cursor = 'pointer';
@@ -488,6 +535,18 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
       });
 
       map.on('mouseleave', 'sar-detections-circle', () => {
+        if (!activePickingModeRef.current) {
+          map.getCanvas().style.cursor = '';
+        }
+      });
+
+      map.on('mouseenter', 'sar-clutter-circle', () => {
+        if (!activePickingModeRef.current) {
+          map.getCanvas().style.cursor = 'pointer';
+        }
+      });
+
+      map.on('mouseleave', 'sar-clutter-circle', () => {
         if (!activePickingModeRef.current) {
           map.getCanvas().style.cursor = '';
         }
@@ -689,6 +748,8 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
           detection_id: det.detection_id,
           confidence: det.confidence,
           match_status: det.match_status,
+          surface_context: det.surface_context || 'PLAUSIBLE_WATER',
+          is_operational: det.is_operational_vessel !== false,
           candidate_mmsi: det.candidate_mmsi,
           distance_km: det.distance_km,
           isSelected: selectedDetection?.detection_id === det.detection_id,
@@ -700,13 +761,16 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
       });
     }
 
-    // Auto-fit bounds to SAR detections or footprint if available
-    if (sarDetections && sarDetections.length > 0) {
+    // Auto-fit bounds to SAR detections (prioritizing operational detections) or footprint
+    const operationalDets = (sarDetections || []).filter((d) => d.is_operational_vessel !== false);
+    const targetDets = operationalDets.length > 0 ? operationalDets : sarDetections;
+
+    if (targetDets && targetDets.length > 0) {
       const bounds = new maplibregl.LngLatBounds(
-        [sarDetections[0].longitude, sarDetections[0].latitude],
-        [sarDetections[0].longitude, sarDetections[0].latitude]
+        [targetDets[0].longitude, targetDets[0].latitude],
+        [targetDets[0].longitude, targetDets[0].latitude]
       );
-      sarDetections.forEach((d) => {
+      targetDets.forEach((d) => {
         bounds.extend([d.longitude, d.latitude]);
       });
       map.fitBounds(bounds, { padding: 80, maxZoom: 13 });

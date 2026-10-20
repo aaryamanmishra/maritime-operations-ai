@@ -75,14 +75,20 @@ def extract_row_features(row: dict) -> Tuple[np.ndarray, int, np.ndarray, np.nda
     # Constrain to known embedding dictionary index [0..15]
     ship_type_id = min(max(ship_type_id, 0), 15)
 
-    # In NOAA Track A, design_speed and dimensions proxies are derived from historical speed
-    mean_sog = float(np.mean(hist_sog[:seq_len])) if seq_len > 0 else 12.0
-    hist_disp = float(row.get("hist_displacement_m", 0.0)) / 1000.0
+    # Clean operational vessel speed dynamics: [mean, min, max, std]
+    # Replaces uninformative constant curation flags (core_eligible, full_eligible)
+    # and prevents shortcut learning on raw historical displacement
+    valid_sog = hist_sog[:seq_len] if seq_len > 0 else [12.0]
+    mean_sog = float(np.mean(valid_sog))
+    min_sog = float(np.min(valid_sog))
+    max_sog = float(np.max(valid_sog))
+    std_sog = float(np.std(valid_sog))
+
     vessel_stats = np.array([
-        mean_sog,         # proxy for operational reference speed
-        hist_disp,        # displacement proxy
-        float(row.get("core_eligible", 1) == "True"),
-        float(row.get("full_eligible", 1) == "True"),
+        mean_sog,  # Operational reference speed
+        min_sog,   # Lower speed boundary in observation window
+        max_sog,   # Upper speed boundary in observation window
+        std_sog,   # Historical speed variability
     ], dtype=np.float32)
 
     # 3. Environmental features (10 dims)
@@ -400,7 +406,7 @@ def train_tft_pipeline():
                 "hist_sog_kn", "hist_cog_sin", "hist_cog_cos",
                 "hist_heading_sin", "hist_heading_cos", "hist_step_displacement_m",
             ],
-            "vessel_static_features": ["design_speed_kn", "displacement_m", "core_eligible", "full_eligible"],
+            "vessel_static_features": ["mean_sog_kn", "min_sog_kn", "max_sog_kn", "std_sog_kn"],
             "environmental_features": [
                 "wind_speed_mps", "wind_dir_sin", "wind_dir_cos",
                 "wind_rel_heading_sin", "wind_rel_heading_cos",

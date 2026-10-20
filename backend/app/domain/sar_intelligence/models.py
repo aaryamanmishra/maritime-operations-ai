@@ -10,6 +10,18 @@ class MatchStatus(str, Enum):
     UNMATCHED = "AIS-UNMATCHED"
 
 
+class GeographicContextStatus(str, Enum):
+    PLAUSIBLE_WATER = "PLAUSIBLE_WATER"
+    TERRESTRIAL_CLUTTER = "TERRESTRIAL_CLUTTER"
+    AMBIGUOUS_COASTAL = "AMBIGUOUS_COASTAL"
+    UNKNOWN = "UNKNOWN"
+
+
+class SARModality(str, Enum):
+    GRD = "GRD"
+    SLC = "SLC"
+
+
 class SARJobStatus(str, Enum):
     QUEUED = "QUEUED"
     DOWNLOADING = "DOWNLOADING"
@@ -28,6 +40,10 @@ class SARSearchRequest(BaseModel):
     start_time: datetime = Field(..., description="Start of temporal observation search window")
     end_time: datetime = Field(..., description="End of temporal observation search window")
     limit: int = Field(default=20, ge=1, le=100, description="Maximum number of scenes to return")
+    modality: SARModality = Field(
+        default=SARModality.GRD,
+        description="SAR product modality: GRD (default Ground Range Detected) or SLC (Single Look Complex)",
+    )
 
     @field_validator("bbox")
     @classmethod
@@ -60,6 +76,7 @@ class SARSceneSummary(BaseModel):
     footprint: dict[str, Any]  # GeoJSON Polygon geometry
     polarization: str = "VV+VH"
     processing_level: str = "LEVEL1_GRD"
+    modality: str = "GRD"
     source: str = "Copernicus CDSE"
     quicklook_url: str | None = None
     download_url: str | None = None
@@ -75,9 +92,12 @@ class SARDetectionItem(BaseModel):
     pixel_bbox: dict[str, float] | None = None
     confidence: float = Field(..., ge=0.0, le=1.0)
     model_version: str
+    modality: str = "GRD"
     length_m: float | None = None
     heading_deg: float | None = None
     match_status: MatchStatus
+    surface_context: GeographicContextStatus = GeographicContextStatus.PLAUSIBLE_WATER
+    is_operational_vessel: bool = True
     candidate_mmsi: int | None = None
     time_difference_seconds: float | None = None
     distance_km: float | None = None
@@ -89,6 +109,7 @@ class SARJobResponse(BaseModel):
     job_id: str
     scene_id: str
     status: SARJobStatus
+    modality: SARModality = SARModality.GRD
     progress_percent: int = Field(default=0, ge=0, le=100)
     message: str = "Job initialized"
     detections_count: int = 0

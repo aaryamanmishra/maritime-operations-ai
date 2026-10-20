@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libgl1 \
     libglib2.0-0 \
+    gdal-bin \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
