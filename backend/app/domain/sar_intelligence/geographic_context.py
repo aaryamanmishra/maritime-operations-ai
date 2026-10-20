@@ -5,6 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from searoute.utils import haversine, pnpoly
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ class PreparedPolygon:
         self.min_y = min(self.vy)
         self.max_y = max(self.vy)
         self.nvert = len(self.vx)
+        self.ext_arr = np.array(exterior, dtype=np.float64) if len(exterior) > 1 else None
 
 
 class GeographicContextValidator:
@@ -75,7 +77,7 @@ class GeographicContextValidator:
     Guarantees:
     - Never rejects dark vessels merely for lacking AIS.
     - Transparent uncertainty reporting for nearshore/coastal boundaries and unavailable data.
-    - Fully deterministic execution based on Natural Earth 1:110m public domain geospatial boundaries.
+    - Fully deterministic execution based on Natural Earth public domain geospatial boundaries.
     """
 
     _instance: "GeographicContextValidator | None" = None
@@ -86,7 +88,7 @@ class GeographicContextValidator:
         coastal_ambiguity_buffer_km: float = 10.0,
     ):
         self.coastal_ambiguity_buffer_km = coastal_ambiguity_buffer_km
-        self.data_source_name = "Natural Earth 1:110m Physical Land"
+        self.data_source_name = "Natural Earth Physical Land"
         self._polygons: list[PreparedPolygon] = []
         self._is_loaded: bool = False
 
@@ -109,9 +111,12 @@ class GeographicContextValidator:
     def _resolve_data_path(data_path: str | Path | None) -> Path | None:
         if data_path:
             return Path(data_path)
-        # Search candidate locations
+        # Search candidate locations (preferring high-resolution 10m dataset)
         base_dir = Path(__file__).resolve().parent
         candidates = [
+            base_dir / "data" / "ne_10m_land.json",
+            Path("backend/app/domain/sar_intelligence/data/ne_10m_land.json"),
+            Path("app/domain/sar_intelligence/data/ne_10m_land.json"),
             base_dir / "data" / "ne_110m_land.json",
             Path("backend/app/domain/sar_intelligence/data/ne_110m_land.json"),
             Path("app/domain/sar_intelligence/data/ne_110m_land.json"),
@@ -123,6 +128,15 @@ class GeographicContextValidator:
 
     def _load_dataset(self, path: Path) -> None:
         try:
+            if "10m" in str(path):
+                self.data_source_name = "Natural Earth 1:10m Physical Land"
+            elif "50m" in str(path):
+                self.data_source_name = "Natural Earth 1:50m Physical Land"
+            elif "110m" in str(path):
+                self.data_source_name = "Natural Earth 1:110m Physical Land"
+            else:
+                self.data_source_name = f"Natural Earth Land ({path.name})"
+
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
@@ -168,13 +182,29 @@ class GeographicContextValidator:
         # Pass 1: Check polygons within a 5-degree bounding box pre-filter
         for p in self._polygons:
             if (p.min_x - 5.0) <= lon <= (p.max_x + 5.0) and (p.min_y - 5.0) <= lat <= (p.max_y + 5.0):
-                ext = p.exterior
-                for i in range(len(ext) - 1):
-                    d = self._point_to_segment_distance_km(
-                        lon, lat, ext[i][0], ext[i][1], ext[i + 1][0], ext[i + 1][1]
-                    )
-                    if d < min_d:
-                        min_d = d
+                if p.ext_arr is not None and len(p.ext_arr) > 1:
+                    p1 = p.ext_arr[:-1]
+                    p2 = p.ext_arr[1:]
+                    d = p2 - p1
+                    denom = np.sum(d**2, axis=1)
+                    denom = np.where(denom == 0, 1e-9, denom)
+                    u = np.clip(((lon - p1[:, 0]) * d[:, 0] + (lat - p1[:, 1]) * d[:, 1]) / denom, 0.0, 1.0)
+                    closest = p1 + u[:, None] * d
+                    deg_dist_sq = (closest[:, 0] - lon) ** 2 + (closest[:, 1] - lat) ** 2
+                    top_k = min(len(closest), 15)
+                    top_idx = np.argpartition(deg_dist_sq, top_k - 1)[:top_k]
+                    for idx in top_idx:
+                        d_km = haversine((lon, lat), (float(closest[idx, 0]), float(closest[idx, 1])))
+                        if d_km < min_d:
+                            min_d = d_km
+                else:
+                    ext = p.exterior
+                    for i in range(len(ext) - 1):
+                        d = self._point_to_segment_distance_km(
+                            lon, lat, ext[i][0], ext[i][1], ext[i + 1][0], ext[i + 1][1]
+                        )
+                        if d < min_d:
+                            min_d = d
 
         # Pass 2: Fallback across all polygons if remote/oceanic
         if min_d == float("inf"):
