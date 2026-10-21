@@ -234,18 +234,23 @@ class SARAnalysisService:
 
             burst_meta: dict[str, Any] = {}
             if mod_upper == "SLC":
-                try:
-                    burst_data = await self.acquisition_client.acquire_slc_burst(
-                        scene_id=scene_id,
-                        target_dir=f"data/sar_cache/{mod_upper.lower()}",
-                    )
-                    if burst_data.get("raster_path") and os.path.exists(burst_data["raster_path"]):
-                        raster_path = burst_data["raster_path"]
-                    burst_meta = burst_data.get("metadata", {})
-                    if scene_summary:
-                        scene_summary.scene_metadata.update(burst_meta)
-                except Exception as slc_err:
-                    logger.warning("SLC client-side burst acquisition deferred: %s", slc_err)
+                # Real SLC burst acquisition fails explicitly if credentials, GDAL, or data are missing.
+                burst_data = await self.acquisition_client.acquire_slc_burst(
+                    scene_id=scene_id,
+                    target_dir=f"data/sar_cache/{mod_upper.lower()}",
+                )
+                r_path = burst_data.get("raster_path")
+                if r_path and os.path.exists(r_path) and os.path.getsize(r_path) > 0:
+                    raster_path = r_path
+                else:
+                    raise RuntimeError(f"SLC burst acquisition produced no valid raster data for scene {scene_id}")
+
+                burst_meta = burst_data.get("metadata", {})
+                if not burst_meta:
+                    raise RuntimeError(f"SLC burst acquisition produced no valid metadata for scene {scene_id}")
+
+                if scene_summary:
+                    scene_summary.scene_metadata.update(burst_meta)
 
             if not os.path.exists(raster_path) and mod_upper == "GRD":
                 # If CDSE credentials are configured and download URL exists, attempt download
@@ -259,23 +264,28 @@ class SARAnalysisService:
                     except Exception as dl_err:
                         logger.warning("CDSE direct asset download deferred: %s", dl_err)
 
-            # Strictly separate fallback sample images by modality
+            # Strictly separate fallback sample images by modality (GRD offline demo fallback only)
             if not os.path.exists(raster_path):
                 if mod_upper == "SLC":
-                    candidate_dirs = ["data/processed/opensar_slc/images/test"]
+                    raise RuntimeError(
+                        f"SLC raster data unavailable for {scene_id}: cannot execute vessel detection on missing SAR data"
+                    )
                 else:
                     candidate_dirs = ["data/processed/opensar_filtered/images/test"]
+                    for candidate_dir in candidate_dirs:
+                        if os.path.exists(candidate_dir):
+                            sample_files = [f for f in os.listdir(candidate_dir) if f.endswith(".jpg")]
+                            if sample_files:
+                                import shutil
+                                shutil.copy2(os.path.join(candidate_dir, sample_files[0]), raster_path)
+                                break
 
-                for candidate_dir in candidate_dirs:
-                    if os.path.exists(candidate_dir):
-                        sample_files = [f for f in os.listdir(candidate_dir) if f.endswith(".jpg")]
-                        if sample_files:
-                            import shutil
-                            shutil.copy2(os.path.join(candidate_dir, sample_files[0]), raster_path)
-                            break
-
-            # If still missing, generate deterministic synthetic backscatter array
+            # If still missing, generate deterministic synthetic backscatter array (GRD offline demo fallback only)
             if not os.path.exists(raster_path):
+                if mod_upper == "SLC":
+                    raise RuntimeError(
+                        f"SLC raster data unavailable for {scene_id}: cannot execute vessel detection on synthetic data"
+                    )
                 arr = np.random.normal(loc=40.0, scale=15.0, size=(640, 640, 3)).clip(0, 255).astype(np.uint8)
                 Image.fromarray(arr).save(raster_path)
 

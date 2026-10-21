@@ -214,12 +214,14 @@ class CopernicusAcquisitionClient:
         scene_id: str,
         burst_id: int | str | None = None,
         target_dir: str = "data/sar_cache/slc",
+        allow_offline_fixtures: bool = False,
     ) -> dict[str, Any]:
         """
         Acquire and prepare an individual Sentinel-1 SLC Burst using proven client-side
         GDAL/S3 range reading.
-        Executes live authenticated S3 range extraction via native gdal_translate when
-        configured; falls back to verified fixtures for offline testing.
+        Executes live authenticated S3 range extraction via native gdal_translate for all
+        real Sentinel-1 scenes (beginning with 'S1'); falls back to verified fixtures strictly
+        in controlled offline test contexts when allow_offline_fixtures=True.
         """
         import shutil
 
@@ -231,16 +233,47 @@ class CopernicusAcquisitionClient:
 
         gdal_bin = "/usr/bin/gdal_translate" if os.path.exists("/usr/bin/gdal_translate") else shutil.which("gdal_translate")
 
-        # 1. LIVE EXTRACTION: Trigger real S3 range reading if configured and GDAL CLI exists
-        if self.is_configured() and gdal_bin and scene_id.startswith("S1"):
-            return await self._extract_slc_burst_live(
+        is_real_s1 = bool(scene_id and scene_id.startswith("S1"))
+
+        # 1. LIVE EXTRACTION: Trigger real S3 range reading for all real Sentinel-1 scenes.
+        # Fails explicitly if credentials, GDAL, or data are missing. Never falls through to fixtures.
+        if is_real_s1:
+            if not self.is_configured():
+                raise RuntimeError(
+                    f"CDSE credentials are not configured for Sentinel-1 SLC burst acquisition ({scene_id}). "
+                    "Live S3 access credentials are required."
+                )
+            if not gdal_bin:
+                raise RuntimeError(
+                    f"gdal_translate binary not available for client-side Sentinel-1 SLC burst extraction ({scene_id}). "
+                    "GDAL CLI is required for live range extraction."
+                )
+
+            live_result = await self._extract_slc_burst_live(
                 scene_id=scene_id,
                 burst_id=burst_id or 258592,
                 target_path=target_path,
                 gdal_translate_bin=gdal_bin,
             )
+            r_path = live_result.get("raster_path")
+            if not r_path or not os.path.exists(r_path) or os.path.getsize(r_path) == 0:
+                raise RuntimeError(
+                    f"Live SLC burst extraction produced no valid raster data for scene {scene_id}."
+                )
+            if not live_result.get("metadata"):
+                raise RuntimeError(
+                    f"Live SLC burst extraction produced no valid metadata for scene {scene_id}."
+                )
+            return live_result
 
-        # 2. OFFLINE / FIXTURE FALLBACK (for unit test fixtures)
+        # 2. CONTROLLED TEST/OFFLINE PATH: Strictly requires allow_offline_fixtures=True
+        if not allow_offline_fixtures:
+            raise RuntimeError(
+                f"Invalid or non-production Sentinel-1 scene identifier '{scene_id}'. "
+                "Real SLC acquisitions require a product ID beginning with 'S1'. "
+                "Offline fixture usage is restricted to explicit test invocations."
+            )
+
         fixture_candidates = [
             Path(__file__).resolve().parent.parent.parent.parent / "domain/sar_intelligence/data",
             Path("artifacts/sar_model_comparison/client_burst_extraction"),
@@ -277,7 +310,7 @@ class CopernicusAcquisitionClient:
             "azimuthPixelSpacing": 13.96549,
             "sar:subswath": "IW1",
             "sar:incidence_angle": 30.55628,
-            "acquisition_method": "client_side_s3_gdal",
+            "acquisition_method": "client_side_s3_gdal_fixture",
         }
         if meta_json.exists():
             try:

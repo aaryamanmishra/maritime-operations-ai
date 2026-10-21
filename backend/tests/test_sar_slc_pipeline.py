@@ -405,13 +405,14 @@ def test_slc_piecewise_gcp_grid_georeferencing():
 
 @pytest.mark.asyncio
 async def test_slc_burst_acquisition_adapter_with_fixtures(tmp_path):
-    """Verify CopernicusAcquisitionClient.acquire_slc_burst loads verified fixtures and metadata."""
+    """Verify CopernicusAcquisitionClient.acquire_slc_burst loads verified fixtures and metadata in test mode."""
     from app.infrastructure.adapters.copernicus.acquisition import CopernicusAcquisitionClient
 
     acq_client = CopernicusAcquisitionClient()
     burst_result = await acq_client.acquire_slc_burst(
         scene_id="test_scene_iw1",
         target_dir=str(tmp_path),
+        allow_offline_fixtures=True,
     )
 
     assert burst_result["raster_path"] is not None
@@ -424,8 +425,68 @@ async def test_slc_burst_acquisition_adapter_with_fixtures(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_real_s1_acquisition_fails_explicitly_when_credentials_missing(tmp_path):
+    """Verify real S1 acquisitions fail with clear error when CDSE credentials are missing."""
+    from app.infrastructure.adapters.copernicus.acquisition import CopernicusAcquisitionClient
+
+    acq_client = CopernicusAcquisitionClient()
+    acq_client.settings.CDSE_CLIENT_ID = None
+    acq_client.settings.CDSE_CLIENT_SECRET = None
+    acq_client.settings.CDSE_USERNAME = None
+    acq_client.settings.CDSE_PASSWORD = None
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await acq_client.acquire_slc_burst(
+            scene_id="S1A_IW_SLC__1SDV_20240810T000834",
+            target_dir=str(tmp_path),
+            allow_offline_fixtures=True,  # Even with allow_offline_fixtures, real S1 must never use fixtures!
+        )
+    assert "CDSE credentials are not configured" in str(exc_info.value)
+    assert "S1A_IW_SLC__1SDV_20240810T000834" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_real_s1_acquisition_fails_explicitly_when_gdal_unavailable(monkeypatch, tmp_path):
+    """Verify real S1 acquisitions fail explicitly when gdal_translate is unavailable."""
+    from app.infrastructure.adapters.copernicus.acquisition import CopernicusAcquisitionClient
+    import shutil
+    import os
+
+    acq_client = CopernicusAcquisitionClient()
+    monkeypatch.setattr(acq_client, "is_configured", lambda: True)
+    orig_exists = os.path.exists
+    monkeypatch.setattr(os.path, "exists", lambda p: False if "gdal" in str(p) else orig_exists(p))
+    orig_which = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda cmd: None if "gdal" in str(cmd) else orig_which(cmd))
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await acq_client.acquire_slc_burst(
+            scene_id="S1A_IW_SLC__1SDV_20240810T000834",
+            target_dir=str(tmp_path),
+        )
+    assert "gdal_translate binary not available" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_offline_fixture_access_rejected(tmp_path):
+    """Verify non-S1 scene IDs reject offline fixtures unless explicitly permitted."""
+    from app.infrastructure.adapters.copernicus.acquisition import CopernicusAcquisitionClient
+
+    acq_client = CopernicusAcquisitionClient()
+    with pytest.raises(RuntimeError) as exc_info:
+        await acq_client.acquire_slc_burst(
+            scene_id="test_scene_iw1",
+            target_dir=str(tmp_path),
+            allow_offline_fixtures=False,
+        )
+    assert "Offline fixture usage is restricted to explicit test invocations" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_slc_service_workflow_end_to_end(monkeypatch):
     """Verify SARAnalysisService._execute_sar_workflow wires SLC burst acquisition, GCP grid, and provenance."""
+    import json
+    import os
     from app.domain.sar_intelligence.service import SARAnalysisService
     from app.domain.sar_intelligence.models import SARJobResponse, SARJobStatus, SARModality, MatchStatus
 
@@ -478,6 +539,29 @@ async def test_slc_service_workflow_end_to_end(monkeypatch):
 
     monkeypatch.setattr(service.correlation_engine, "correlate_detection", mock_correlate)
 
+    # Mock burst acquisition with verified test fixture to test service wiring
+    test_chip = os.path.join(os.path.dirname(__file__), "../app/domain/sar_intelligence/data/slc_test_chip.jpg")
+    meta_fixture = os.path.join(os.path.dirname(__file__), "../app/domain/sar_intelligence/data/burst_258592_metadata.json")
+    with open(meta_fixture) as f:
+        loaded_meta = json.load(f)
+    burst_meta = {
+        "rangePixelSpacing": 2.329562,
+        "azimuthPixelSpacing": 13.96549,
+        "sar:subswath": "IW1",
+        "sar:incidence_angle": 30.55628,
+        "geolocation_grid_points": loaded_meta.get("geolocation_grid_points", []),
+        "acquisition_method": "mock_burst_fixture",
+    }
+
+    async def mock_acquire_slc_burst(*args, **kwargs):
+        return {
+            "raster_path": test_chip,
+            "metadata": burst_meta,
+            "burst_id": 258592,
+        }
+
+    monkeypatch.setattr(service.acquisition_client, "acquire_slc_burst", mock_acquire_slc_burst)
+
     await service._execute_sar_workflow(
         job_id=job_id,
         scene_id="S1A_IW_SLC__1SDV_20240810T000834",
@@ -494,3 +578,122 @@ async def test_slc_service_workflow_end_to_end(monkeypatch):
         assert det.provenance["geolocation_method"] == "piecewise_gcp_grid"
         assert det.provenance["range_pixel_spacing_m"] == 2.329562
         assert det.provenance["azimuth_pixel_spacing_m"] == 13.96549
+
+
+@pytest.mark.asyncio
+async def test_slc_service_workflow_fails_explicitly_on_acquisition_error(monkeypatch):
+    """Verify failed SLC acquisitions set job status to FAILED and never substitute synthetic data."""
+    from app.domain.sar_intelligence.service import SARAnalysisService
+    from app.domain.sar_intelligence.models import SARJobResponse, SARJobStatus, SARModality
+
+    service = SARAnalysisService.get_instance()
+    job_id = "test-slc-job-fail"
+    job = SARJobResponse(
+        job_id=job_id,
+        scene_id="S1A_IW_SLC__1SDV_20240810T000834",
+        status=SARJobStatus.QUEUED,
+        modality=SARModality.SLC,
+    )
+    service._jobs[job_id] = job
+
+    class MockAsyncSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        async def execute(self, stmt):
+            class MockResult:
+                def scalar_one_or_none(self):
+                    return None
+
+            return MockResult()
+
+        def add(self, obj):
+            pass
+
+        async def commit(self):
+            pass
+
+    # Simulate real SLC acquisition failure (e.g. unconfigured credentials)
+    async def mock_failing_burst(*args, **kwargs):
+        raise RuntimeError("CDSE credentials are not configured for Sentinel-1 SLC burst acquisition")
+
+    monkeypatch.setattr(service.acquisition_client, "acquire_slc_burst", mock_failing_burst)
+
+    detector_called = False
+
+    def mock_predict(*args, **kwargs):
+        nonlocal detector_called
+        detector_called = True
+        return []
+
+    detector = YOLO26sVesselDetector.get_instance(modality="SLC")
+    monkeypatch.setattr(detector, "predict_scene_tiles", mock_predict)
+
+    await service._execute_sar_workflow(
+        job_id=job_id,
+        scene_id="S1A_IW_SLC__1SDV_20240810T000834",
+        session_factory=lambda: MockAsyncSession(),
+        modality="SLC",
+    )
+
+    assert job.status == SARJobStatus.FAILED
+    assert "SAR analysis failed" in job.message
+    assert "CDSE credentials are not configured" in job.message
+    assert not detector_called, "Detector must not run on failed or synthetic data"
+    assert job.detections == []
+
+
+@pytest.mark.asyncio
+async def test_slc_service_workflow_fails_when_no_valid_raster_returned(monkeypatch):
+    """Verify that returning no valid raster path in SLC workflow triggers FAILED job status."""
+    from app.domain.sar_intelligence.service import SARAnalysisService
+    from app.domain.sar_intelligence.models import SARJobResponse, SARJobStatus, SARModality
+
+    service = SARAnalysisService.get_instance()
+    job_id = "test-slc-job-no-raster"
+    job = SARJobResponse(
+        job_id=job_id,
+        scene_id="S1A_IW_SLC__1SDV_20240810T000834",
+        status=SARJobStatus.QUEUED,
+        modality=SARModality.SLC,
+    )
+    service._jobs[job_id] = job
+
+    class MockAsyncSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        async def execute(self, stmt):
+            class MockResult:
+                def scalar_one_or_none(self):
+                    return None
+
+            return MockResult()
+
+        def add(self, obj):
+            pass
+
+        async def commit(self):
+            pass
+
+    async def mock_empty_burst(*args, **kwargs):
+        return {"raster_path": None, "metadata": {}}
+
+    monkeypatch.setattr(service.acquisition_client, "acquire_slc_burst", mock_empty_burst)
+
+    await service._execute_sar_workflow(
+        job_id=job_id,
+        scene_id="S1A_IW_SLC__1SDV_20240810T000834",
+        session_factory=lambda: MockAsyncSession(),
+        modality="SLC",
+    )
+
+    assert job.status == SARJobStatus.FAILED
+    assert "no valid raster data" in job.message
+    assert job.detections == []
