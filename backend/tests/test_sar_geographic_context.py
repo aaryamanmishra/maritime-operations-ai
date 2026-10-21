@@ -5,7 +5,6 @@ from pathlib import Path
 from app.domain.sar_intelligence.geographic_context import (
     GeographicContextStatus,
     GeographicContextValidator,
-    GeographicContextResult,
 )
 from app.domain.sar_intelligence.models import (
     MatchStatus,

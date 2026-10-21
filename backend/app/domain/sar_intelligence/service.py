@@ -2,7 +2,7 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from fastapi import BackgroundTasks
@@ -12,10 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.domain.sar_intelligence.correlation import AISSARCorrelationEngine
-from app.domain.sar_intelligence.geographic_context import (
-    GeographicContextStatus,
-    GeographicContextValidator,
-)
+from app.domain.sar_intelligence.geographic_context import GeographicContextValidator
 from app.domain.sar_intelligence.inference import YOLO26sVesselDetector
 from app.domain.sar_intelligence.models import (
     MatchStatus,

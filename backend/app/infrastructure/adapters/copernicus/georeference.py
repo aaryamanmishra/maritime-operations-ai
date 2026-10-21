@@ -77,12 +77,12 @@ class SARGeoreferencer:
         # Group points by line
         lines_dict: dict[float, list[dict[str, Any]]] = {}
         for p in grid_points:
-            l = float(p.get("line", 0.0))
-            lines_dict.setdefault(l, []).append(p)
+            line_val = float(p.get("line", 0.0))
+            lines_dict.setdefault(line_val, []).append(p)
 
         sorted_lines = sorted(lines_dict.keys())
-        for l in sorted_lines:
-            lines_dict[l].sort(key=lambda pt: float(pt.get("pixel", 0.0)))
+        for line_val in sorted_lines:
+            lines_dict[line_val].sort(key=lambda pt: float(pt.get("pixel", 0.0)))
 
         # Find enclosing line interval [l0, l1]
         if abs_y <= sorted_lines[0]:
