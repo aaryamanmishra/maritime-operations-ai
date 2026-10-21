@@ -382,6 +382,12 @@ class SARAnalysisService:
                         "geolocation_method": "piecewise_gcp_grid" if ("geolocation_grid_points" in effective_metadata and effective_metadata["geolocation_grid_points"]) else "bilinear_footprint",
                         "modality": mod_upper,
                     }
+                    if "source_tile" in det:
+                        det_provenance["source_tile"] = det["source_tile"]
+                    if "coord_transform" in det:
+                        det_provenance["coord_transform"] = det["coord_transform"]
+                    if det.get("duplicate_provenance"):
+                        det_provenance["duplicate_provenance"] = det["duplicate_provenance"]
                     if "rangePixelSpacing" in effective_metadata:
                         det_provenance["range_pixel_spacing_m"] = effective_metadata["rangePixelSpacing"]
                         det_provenance["azimuth_pixel_spacing_m"] = effective_metadata.get("azimuthPixelSpacing")

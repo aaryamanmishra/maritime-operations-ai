@@ -306,16 +306,20 @@ print(f"Fused image written: {w}x{h}")
         "bottom_left": (p_bl["longitude"], p_bl["latitude"]),
     }
 
-    raw_detections = detector.predict_scene_tiles(
+    raw_detections, all_raw_candidates = detector.predict_scene_tiles(
         tiles=tiles,
         corner_coords=corners,
         parent_width=width,
         parent_height=height,
         confidence_threshold=0.25,
         scene_metadata=scene_metadata,
+        return_raw=True,
     )
     t_inference = time.time() - t_inf0
-    print(f"  -> Model evaluated {len(tiles)} tiles in {t_inference:.2f}s. Raw detections: {len(raw_detections)}")
+    print(
+        f"  -> Model evaluated {len(tiles)} tiles in {t_inference:.2f}s. "
+        f"Raw candidates: {len(all_raw_candidates)}, Deduplicated operational detections: {len(raw_detections)}"
+    )
 
     # Step 6: Geographic Validation with Natural Earth 1:10m
     print("[6] Classifying surface context with Natural Earth 1:10m validator...")
@@ -343,6 +347,12 @@ print(f"Fused image written: {w}x{h}")
             "reason": geo_res.reason,
             "data_source": geo_res.data_source,
             "pixel_bbox": det["pixel_bbox"],
+            "source_tile_id": det.get("source_tile", {}).get("tile_index"),
+            "tile_origin_x": det.get("source_tile", {}).get("x_offset"),
+            "tile_origin_y": det.get("source_tile", {}).get("y_offset"),
+            "source_tile": det.get("source_tile"),
+            "coord_transform": det.get("coord_transform"),
+            "duplicate_provenance": det.get("duplicate_provenance"),
         }
         classified_records.append(rec)
 
@@ -438,19 +448,31 @@ print(f"Fused image written: {w}x{h}")
     print(f"  Saved detection overlay to {overview_path}")
     print(f"  Saved {len(classified_records)} chip cutouts to {chips_dir}")
 
-    # Step 9: Save CSV and Metrics JSON
+    # Step 9: Save CSV, Structured Provenance JSON, Raw Predictions, and Metrics JSON
     import csv
     csv_path = scene_out / "detections.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[
+        fieldnames = [
             "detection_id", "latitude", "longitude", "confidence", "length_m",
             "heading_deg", "status", "is_operational_vessel", "distance_to_coast_km",
-            "is_on_land", "reason", "data_source"
-        ])
+            "is_on_land", "reason", "data_source", "pixel_bbox", "source_tile_id",
+            "tile_origin_x", "tile_origin_y"
+        ]
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         for r in classified_records:
-            row = {k: v for k, v in r.items() if k != "pixel_bbox"}
+            row = dict(r)
+            if isinstance(row.get("pixel_bbox"), dict):
+                row["pixel_bbox"] = json.dumps(row["pixel_bbox"])
             writer.writerow(row)
+
+    # Persist structured deduplicated detections with full provenance & duplicate linkage
+    with open(scene_out / "detections_with_provenance.json", "w", encoding="utf-8") as f:
+        json.dump(classified_records, f, indent=2)
+
+    # Persist all raw tile-level detections prior to cross-tile deduplication
+    with open(scene_out / "raw_detections.json", "w", encoding="utf-8") as f:
+        json.dump(all_raw_candidates, f, indent=2)
 
     scene_metrics = {
         "scene_name": name,
@@ -469,7 +491,8 @@ print(f"Fused image written: {w}x{h}")
         "processing_time_seconds": round(time.time() - t0_scene, 2),
         "inference_time_seconds": round(t_inference, 2),
         "tiles_evaluated": len(tiles),
-        "raw_candidate_count": len(raw_detections),
+        "raw_candidate_count": len(all_raw_candidates),
+        "deduplicated_operational_count": len(raw_detections),
         "operational_vessel_count": len(operational_detections),
         "ambiguous_coastal_count": len(ambiguous_detections),
         "terrestrial_clutter_count": len(clutter_detections),

@@ -697,3 +697,291 @@ async def test_slc_service_workflow_fails_when_no_valid_raster_returned(monkeypa
     assert job.status == SARJobStatus.FAILED
     assert "no valid raster data" in job.message
     assert job.detections == []
+
+
+def test_cross_tile_deduplication_synthetic_target_in_overlap():
+    """Verify same synthetic target appearing across overlapping tile boundaries is merged with provenance."""
+    from app.domain.sar_intelligence.inference import deduplicate_scene_detections
+
+    # Target placed at scene pixels [600, 300, 630, 320]
+    # Tile 0: [0..640, 0..640]
+    # Tile 1: [576..1216, 0..640] (overlap on x in [576, 640])
+    cand0 = {
+        "detection_id": "det-tile0-target1",
+        "latitude": 1.25,
+        "longitude": 103.80,
+        "bounding_box": [600.0, 300.0, 630.0, 320.0],
+        "pixel_bbox": {"ymin": 300.0, "xmin": 600.0, "ymax": 320.0, "xmax": 630.0},
+        "confidence": 0.89,
+        "class_id": 0,
+        "class_name": "vessel",
+        "source_tile": {
+            "tile_index": 0,
+            "x_offset": 0,
+            "y_offset": 0,
+            "width": 640,
+            "height": 640,
+            "tile_bbox": [600.0, 300.0, 630.0, 320.0],
+        },
+        "coord_transform": {"type": "tile_to_scene_translation", "dx": 0, "dy": 0},
+        "duplicate_provenance": None,
+    }
+
+    # Tile 1 sees target at local x = 600 - 576 = 24 -> local box [24, 300, 54, 320]
+    # In scene coordinates: 576 + 24 = 600, 576 + 54 = 630
+    cand1 = {
+        "detection_id": "det-tile1-target1",
+        "latitude": 1.25,
+        "longitude": 103.80,
+        "bounding_box": [600.0, 300.0, 630.0, 320.0],
+        "pixel_bbox": {"ymin": 300.0, "xmin": 600.0, "ymax": 320.0, "xmax": 630.0},
+        "confidence": 0.74,
+        "class_id": 0,
+        "class_name": "vessel",
+        "source_tile": {
+            "tile_index": 1,
+            "x_offset": 576,
+            "y_offset": 0,
+            "width": 640,
+            "height": 640,
+            "tile_bbox": [24.0, 300.0, 54.0, 320.0],
+        },
+        "coord_transform": {"type": "tile_to_scene_translation", "dx": 576, "dy": 0},
+        "duplicate_provenance": None,
+    }
+
+    operational, all_candidates = deduplicate_scene_detections([cand0, cand1], iou_threshold=0.30)
+
+    # Must be represented exactly once operationally
+    assert len(operational) == 1
+    primary = operational[0]
+    assert primary["detection_id"] == "det-tile0-target1"
+    assert primary["confidence"] == 0.89
+
+    # Primary links suppressed candidate
+    assert primary["duplicate_provenance"] is not None
+    assert primary["duplicate_provenance"]["is_deduplicated"] is True
+    assert primary["duplicate_provenance"]["primary_detection_id"] == "det-tile0-target1"
+    dups = primary["duplicate_provenance"]["duplicate_candidates"]
+    assert len(dups) == 1
+    assert dups[0]["detection_id"] == "det-tile1-target1"
+    assert dups[0]["source_tile_index"] == 1
+    assert dups[0]["tile_origin"] == [576, 0]
+    assert dups[0]["confidence"] == 0.74
+    assert dups[0]["iou_with_primary"] == 1.0
+    assert dups[0]["center_distance_px"] == 0.0
+
+    # Suppressed twin in all_candidates records duplicate_of
+    suppressed = next(c for c in all_candidates if c["detection_id"] == "det-tile1-target1")
+    assert suppressed["duplicate_provenance"]["is_deduplicated"] is False
+    assert suppressed["duplicate_provenance"]["duplicate_of"] == "det-tile0-target1"
+
+
+def test_cross_tile_deduplication_distinct_nearby_targets_remain_separate():
+    """Verify two distinct nearby vessels in overlap margin remain separate operational contacts."""
+    from app.domain.sar_intelligence.inference import deduplicate_scene_detections
+
+    # Target 1 in overlap at scene y=100
+    candA = {
+        "detection_id": "det-vessel-A",
+        "bounding_box": [590.0, 100.0, 620.0, 130.0],
+        "confidence": 0.85,
+        "source_tile": {
+            "tile_index": 0,
+            "x_offset": 0,
+            "y_offset": 0,
+            "width": 640,
+            "height": 640,
+            "tile_bbox": [590.0, 100.0, 620.0, 130.0],
+        },
+    }
+
+    # Target 2 in overlap at scene y=260 (distinct vessel ~130 px / ~1.8 km away)
+    candB = {
+        "detection_id": "det-vessel-B",
+        "bounding_box": [595.0, 260.0, 625.0, 290.0],
+        "confidence": 0.81,
+        "source_tile": {
+            "tile_index": 1,
+            "x_offset": 576,
+            "y_offset": 0,
+            "width": 640,
+            "height": 640,
+            "tile_bbox": [19.0, 260.0, 49.0, 290.0],
+        },
+    }
+
+    operational, _ = deduplicate_scene_detections([candA, candB], iou_threshold=0.30)
+
+    # Both distinct targets must be retained
+    assert len(operational) == 2
+    ids = {op["detection_id"] for op in operational}
+    assert ids == {"det-vessel-A", "det-vessel-B"}
+    assert operational[0]["duplicate_provenance"] is None
+    assert operational[1]["duplicate_provenance"] is None
+
+
+def test_non_overlapping_tiles_never_cause_cross_scene_suppression():
+    """Verify non-overlapping tiles cannot suppress each other even with identical relative tile boxes."""
+    from app.domain.sar_intelligence.inference import deduplicate_scene_detections
+
+    # Tile 0: [0..640, 0..640]
+    cand0 = {
+        "detection_id": "det-scene-nw",
+        "bounding_box": [100.0, 100.0, 150.0, 130.0],
+        "confidence": 0.90,
+        "source_tile": {
+            "tile_index": 0,
+            "x_offset": 0,
+            "y_offset": 0,
+            "width": 640,
+            "height": 640,
+            "tile_bbox": [100.0, 100.0, 150.0, 130.0],
+        },
+    }
+
+    # Tile 5: [2500..3140, 1500..2140] (completely disjoint part of the scene)
+    cand5 = {
+        "detection_id": "det-scene-se",
+        "bounding_box": [2600.0, 1600.0, 2650.0, 1630.0],
+        "confidence": 0.88,
+        "source_tile": {
+            "tile_index": 5,
+            "x_offset": 2500,
+            "y_offset": 1500,
+            "width": 640,
+            "height": 640,
+            "tile_bbox": [100.0, 100.0, 150.0, 130.0],
+        },
+    }
+
+    operational, _ = deduplicate_scene_detections([cand0, cand5], iou_threshold=0.30)
+
+    assert len(operational) == 2
+    assert {op["detection_id"] for op in operational} == {"det-scene-nw", "det-scene-se"}
+
+
+def test_tile_offsets_and_coordinate_transformations_in_inference():
+    """Verify tile coordinate to scene coordinate transformation preserves exact pixel geometry."""
+    detector = YOLO26sVesselDetector.get_instance(modality="SLC")
+
+    # Mock single tile at (x=1152, y=576)
+    tile_arr = np.zeros((640, 640, 3), dtype=np.uint8)
+    tile = SARTile(
+        tile_index=3,
+        image_array=tile_arr,
+        x_offset=1152,
+        y_offset=576,
+        width=640,
+        height=640,
+        parent_width=3000,
+        parent_height=2000,
+        modality="SLC",
+    )
+
+    corners = {
+        "top_left": (103.0, 1.5),
+        "top_right": (104.0, 1.5),
+        "bottom_right": (104.0, 1.0),
+        "bottom_left": (103.0, 1.0),
+    }
+
+    # Mock single tile detection
+    mock_tile_det = [{
+        "bounding_box": [50.0, 70.0, 110.0, 95.0],
+        "confidence": 0.82,
+        "class_id": 0,
+        "class_name": "vessel",
+    }]
+
+    original_predict = detector.predict_single_tile
+    detector.predict_single_tile = lambda arr, confidence_threshold=0.25: mock_tile_det
+
+    try:
+        operational, raw = detector.predict_scene_tiles(
+            tiles=[tile],
+            corner_coords=corners,
+            parent_width=3000,
+            parent_height=2000,
+            return_raw=True,
+        )
+
+        assert len(operational) == 1
+        det = operational[0]
+
+        # Scene coordinates must be tile_offset + local_coord
+        # xmin: 1152 + 50 = 1202.0, ymin: 576 + 70 = 646.0
+        # xmax: 1152 + 110 = 1262.0, ymax: 576 + 95 = 671.0
+        assert det["bounding_box"] == [1202.0, 646.0, 1262.0, 671.0]
+        assert det["pixel_bbox"] == {"ymin": 646.0, "xmin": 1202.0, "ymax": 671.0, "xmax": 1262.0}
+
+        # Source tile provenance
+        assert det["source_tile"]["tile_index"] == 3
+        assert det["source_tile"]["x_offset"] == 1152
+        assert det["source_tile"]["y_offset"] == 576
+        assert det["source_tile"]["tile_bbox"] == [50.0, 70.0, 110.0, 95.0]
+
+        # Coordinate transformation
+        assert det["coord_transform"]["type"] == "tile_to_scene_translation"
+        assert det["coord_transform"]["dx"] == 1152
+        assert det["coord_transform"]["dy"] == 576
+
+        # Raw predictions match operational
+        assert len(raw) == 1
+        assert raw[0]["detection_id"] == det["detection_id"]
+        assert raw[0]["source_tile"]["tile_bbox"] == [50.0, 70.0, 110.0, 95.0]
+    finally:
+        detector.predict_single_tile = original_predict
+
+
+def test_grd_default_modality_unaffected_by_slc_deduplication():
+    """Verify default modality is GRD and GRD tile processing remains unaffected."""
+    detector_grd = YOLO26sVesselDetector.get_instance()
+    assert detector_grd.modality == "GRD"
+    assert detector_grd.model_version == "yolo26s-opensar-v1"
+
+    tile_arr = np.zeros((640, 640, 3), dtype=np.uint8)
+    tile = SARTile(
+        tile_index=0,
+        image_array=tile_arr,
+        x_offset=0,
+        y_offset=0,
+        width=640,
+        height=640,
+        parent_width=640,
+        parent_height=640,
+        modality="GRD",
+    )
+
+    corners = {
+        "top_left": (-2.0, 51.0),
+        "top_right": (0.0, 51.0),
+        "bottom_right": (0.0, 50.0),
+        "bottom_left": (-2.0, 50.0),
+    }
+
+    mock_tile_det = [{
+        "bounding_box": [10.0, 20.0, 50.0, 40.0],
+        "confidence": 0.77,
+        "class_id": 0,
+        "class_name": "vessel",
+    }]
+
+    original_predict = detector_grd.predict_single_tile
+    detector_grd.predict_single_tile = lambda arr, confidence_threshold=0.25: mock_tile_det
+
+    try:
+        dets = detector_grd.predict_scene_tiles(
+            tiles=[tile],
+            corner_coords=corners,
+            parent_width=640,
+            parent_height=640,
+        )
+        assert len(dets) == 1
+        assert dets[0]["modality"] == "GRD"
+        assert dets[0]["model_version"] == "yolo26s-opensar-v1"
+        assert dets[0]["bounding_box"] == [10.0, 20.0, 50.0, 40.0]
+        assert "source_tile" in dets[0]
+        assert "coord_transform" in dets[0]
+    finally:
+        detector_grd.predict_single_tile = original_predict
