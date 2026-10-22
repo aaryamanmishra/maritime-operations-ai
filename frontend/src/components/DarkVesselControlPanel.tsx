@@ -165,7 +165,8 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
       : operationalDetections.length;
 
   const matchedCount = operationalDetections.filter((d) => d.match_status === "AIS-MATCHED").length;
-  const darkVesselCount = operationalDetections.filter((d) => d.match_status === "AIS-UNMATCHED").length;
+  const unmatchedCount = operationalDetections.filter((d) => d.match_status === "AIS-UNMATCHED").length;
+  const noCoverageCount = operationalDetections.filter((d) => d.match_status === "AIS COMPARISON UNAVAILABLE").length;
   const clutterCount = clutterCandidates.length;
 
   return (
@@ -408,7 +409,7 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
           </div>
 
           {/* Counts badges */}
-          <div className={`grid ${clutterCount > 0 ? "grid-cols-3" : "grid-cols-2"} gap-1.5 mb-3`}>
+          <div className={`grid ${clutterCount > 0 && noCoverageCount > 0 ? "grid-cols-4" : (clutterCount > 0 || noCoverageCount > 0 ? "grid-cols-3" : "grid-cols-2")} gap-1.5 mb-3`}>
             <div className="p-2 bg-emerald-950/50 border border-emerald-800/60 rounded text-center">
               <div className="text-sm font-bold text-emerald-400" data-testid="matched-count">{matchedCount}</div>
               <div className="text-[9px] text-emerald-300 uppercase tracking-wider font-semibold">
@@ -416,11 +417,19 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
               </div>
             </div>
             <div className="p-2 bg-amber-950/50 border border-amber-800/60 rounded text-center">
-              <div className="text-sm font-bold text-amber-400" data-testid="unmatched-count">{darkVesselCount}</div>
+              <div className="text-sm font-bold text-amber-400" data-testid="unmatched-count">{unmatchedCount}</div>
               <div className="text-[9px] text-amber-300 uppercase tracking-wider font-semibold">
-                DARK VESSELS
+                AIS-UNMATCHED
               </div>
             </div>
+            {noCoverageCount > 0 && (
+              <div className="p-2 bg-slate-900 border border-slate-700/80 rounded text-center">
+                <div className="text-sm font-bold text-slate-300" data-testid="no-coverage-count">{noCoverageCount}</div>
+                <div className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">
+                  NO COVERAGE
+                </div>
+              </div>
+            )}
             {clutterCount > 0 && (
               <div className="p-2 bg-rose-950/50 border border-rose-800/60 rounded text-center">
                 <div className="text-sm font-bold text-rose-400" data-testid="clutter-count">{clutterCount}</div>
@@ -478,7 +487,9 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
                           className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                             isMatched
                               ? "bg-emerald-900/80 text-emerald-300 border border-emerald-700/60"
-                              : "bg-amber-900/80 text-amber-300 border border-amber-700/60"
+                              : det.match_status === "AIS-UNMATCHED"
+                              ? "bg-amber-900/80 text-amber-300 border border-amber-700/60"
+                              : "bg-slate-800 text-slate-300 border border-slate-600"
                           }`}
                         >
                           {det.match_status}
@@ -494,8 +505,10 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
                         <span className="text-emerald-400 font-mono">
                           MMSI: {det.candidate_mmsi} ({det.distance_km} km)
                         </span>
+                      ) : det.match_status === "AIS-UNMATCHED" ? (
+                        <span className="text-amber-400/90 font-medium">Uncorrelated Contact (Dark Vessel Target)</span>
                       ) : (
-                        <span className="text-amber-400/90 font-medium">Dark Vessel Target</span>
+                        <span className="text-slate-400 font-medium">AIS Coverage Missing</span>
                       )}
                     </div>
                   </div>

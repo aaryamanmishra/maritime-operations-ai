@@ -96,6 +96,27 @@ class CopernicusCatalogClient:
             logger.warning("Network error contacting Copernicus STAC: %s", exc)
             return []
 
+    async def get_scene_by_id(self, scene_id: str, modality: str = "GRD") -> SARSceneSummary | None:
+        """Fetch full STAC feature metadata for a specific Sentinel-1 scene ID."""
+        mod = modality.upper()
+        collection = "sentinel-1-slc" if mod == "SLC" else "sentinel-1-grd"
+        payload = {
+            "collections": [collection],
+            "ids": [scene_id],
+            "limit": 1,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(self.search_url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    features = data.get("features", [])
+                    if features:
+                        return self._parse_stac_feature(features[0], modality=mod)
+        except Exception as e:
+            logger.warning("Failed to fetch scene by ID %s: %s", scene_id, e)
+        return None
+
     def _parse_stac_feature(self, feat: dict[str, Any], modality: str = "GRD") -> SARSceneSummary | None:
         try:
             scene_id = feat["id"]
@@ -140,6 +161,18 @@ class CopernicusCatalogClient:
                 download_url = assets["vv"]["alternate"]["https"].get("href")
             elif "iw1-vv" in assets and "alternate" in assets["iw1-vv"] and "https" in assets["iw1-vv"]["alternate"]:
                 download_url = assets["iw1-vv"]["alternate"]["https"].get("href")
+
+            # Preserve direct S3 measurement asset URIs for range/windowed extraction
+            for k, v in assets.items():
+                if not isinstance(v, dict):
+                    continue
+                href = v.get("href", "")
+                if k in ("vv", "iw1-vv") and "s3_vv" not in props:
+                    props["s3_vv"] = href
+                elif k in ("vh", "iw1-vh") and "s3_vh" not in props:
+                    props["s3_vh"] = href
+                elif ("schema-product" in k or "manifest" in k) and "s3_xml" not in props:
+                    props["s3_xml"] = href
 
             return SARSceneSummary(
                 scene_id=scene_id,

@@ -215,6 +215,7 @@ class CopernicusAcquisitionClient:
         burst_id: int | str | None = None,
         target_dir: str = "data/sar_cache/slc",
         allow_offline_fixtures: bool = False,
+        scene_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Acquire and prepare an individual Sentinel-1 SLC Burst using proven client-side
@@ -254,6 +255,7 @@ class CopernicusAcquisitionClient:
                 burst_id=burst_id or 258592,
                 target_path=target_path,
                 gdal_translate_bin=gdal_bin,
+                scene_metadata=scene_metadata,
             )
             r_path = live_result.get("raster_path")
             if not r_path or not os.path.exists(r_path) or os.path.getsize(r_path) == 0:
@@ -336,6 +338,7 @@ class CopernicusAcquisitionClient:
         burst_id: int | str,
         target_path: Path,
         gdal_translate_bin: str,
+        scene_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Execute client-side bounded Sentinel-1 SLC burst range extraction from CDSE S3.
@@ -370,10 +373,15 @@ class CopernicusAcquisitionClient:
         year, month, day = clean_id[17:21], clean_id[21:23], clean_id[23:25]
         s3_base = f"/vsis3/eodata/Sentinel-1/SAR/IW_SLC__1S/{year}/{month}/{day}/{safe_name}"
 
-        # Target Burst 258592 geometry (IW1, index 0)
-        s3_vv = f"{s3_base}/measurement/s1a-iw1-slc-vv-20240810t000834-20240810t000902-055143-06b85a-004.tiff"
-        s3_vh = f"{s3_base}/measurement/s1a-iw1-slc-vh-20240810t000834-20240810t000902-055143-06b85a-001.tiff"
-        s3_xml = f"{s3_base}/annotation/s1a-iw1-slc-vv-20240810t000834-20240810t000902-055143-06b85a-004.xml"
+        # Resolve dynamic measurement paths if provided in scene_metadata
+        if scene_metadata and scene_metadata.get("s3_vv"):
+            s3_vv = scene_metadata["s3_vv"].replace("s3://", "/vsis3/")
+            s3_vh = scene_metadata.get("s3_vh", "").replace("s3://", "/vsis3/")
+            s3_xml = scene_metadata.get("s3_xml", "").replace("s3://", "/vsis3/")
+        else:
+            s3_vv = f"{s3_base}/measurement/s1a-iw1-slc-vv-20240810t000834-20240810t000902-055143-06b85a-004.tiff"
+            s3_vh = f"{s3_base}/measurement/s1a-iw1-slc-vh-20240810t000834-20240810t000902-055143-06b85a-001.tiff"
+            s3_xml = f"{s3_base}/annotation/s1a-iw1-slc-vv-20240810t000834-20240810t000902-055143-06b85a-004.xml"
 
         burst_width = 21304
         burst_height = 1496
@@ -527,4 +535,107 @@ out_ds = None
             "metadata": burst_meta,
             "burst_id": burst_id or 258592,
             "acquisition_method": "client_side_s3_gdal_live",
+        }
+
+    async def acquire_grd_scene(
+        self,
+        scene_id: str,
+        scene_metadata: dict[str, Any] | None = None,
+        target_dir: str = "data/sar_cache/grd",
+    ) -> dict[str, Any]:
+        """
+        Acquire a Sentinel-1 GRD scene raster via authenticated range reading of the Cloud-Optimized
+        GeoTIFF (COG) asset on CDSE S3. Avoids downloading the full 1.16 GB product archive.
+        """
+        import shutil
+        import subprocess
+        import numpy as np
+        from PIL import Image
+        from app.infrastructure.adapters.copernicus.preprocessing import SARPreprocessor
+
+        clean_id = scene_id.replace(" ", "_").replace(".SAFE", "") if scene_id else "grd_default"
+        target_path = Path(target_dir) / clean_id
+        target_path.mkdir(parents=True, exist_ok=True)
+        fused_raster = target_path / "scene_fused.png"
+
+        if fused_raster.exists() and fused_raster.stat().st_size > 0:
+            return {"raster_path": str(fused_raster), "metadata": scene_metadata or {}}
+
+        if not self.is_configured():
+            raise RuntimeError(
+                f"CDSE credentials are not configured for Sentinel-1 GRD acquisition ({scene_id})."
+            )
+
+        gdal_bin = "/usr/bin/gdal_translate" if os.path.exists("/usr/bin/gdal_translate") else shutil.which("gdal_translate")
+        if not gdal_bin:
+            raise RuntimeError(
+                f"gdal_translate binary not available for Sentinel-1 GRD COG range extraction ({scene_id})."
+            )
+
+        creds = await self.get_s3_credentials()
+        child_env = {
+            **os.environ,
+            "AWS_ACCESS_KEY_ID": creds["access_id"],
+            "AWS_SECRET_ACCESS_KEY": creds["secret"],
+            "AWS_S3_ENDPOINT": "eodata.dataspace.copernicus.eu",
+            "AWS_HTTPS": "YES",
+            "AWS_VIRTUAL_HOSTING": "FALSE",
+            "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
+            "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".tiff,.tif",
+        }
+        if creds.get("session_token"):
+            child_env["AWS_SESSION_TOKEN"] = creds["session_token"]
+
+        s3_vv = None
+        s3_vh = None
+        if scene_metadata:
+            if scene_metadata.get("s3_vv"):
+                s3_vv = scene_metadata["s3_vv"].replace("s3://", "/vsis3/")
+            if scene_metadata.get("s3_vh"):
+                s3_vh = scene_metadata["s3_vh"].replace("s3://", "/vsis3/")
+
+        if not s3_vv:
+            safe_name = f"{clean_id}.SAFE"
+            year, month, day = clean_id[17:21], clean_id[21:23], clean_id[23:25]
+            s3_vv = f"/vsis3/eodata/Sentinel-1/SAR/IW_GRDH_1S-COG/{year}/{month}/{day}/{safe_name}/measurement/{clean_id.lower()}-vv-cog.tiff"
+
+        out_vv = target_path / "measurement_vv.tiff"
+        out_vh = target_path / "measurement_vh.tiff"
+
+        logger.info("Executing client-side S3 range extraction for GRD COG from %s", s3_vv)
+        cmd_vv = [
+            gdal_bin,
+            "-outsize", "2048", "0",
+            "-r", "bilinear",
+            "-co", "COMPRESS=DEFLATE",
+            s3_vv,
+            str(out_vv),
+        ]
+        res_vv = subprocess.run(cmd_vv, capture_output=True, text=True, env=child_env, timeout=120.0)
+        if res_vv.returncode != 0:
+            err_clean = res_vv.stderr.replace(creds.get("access_id", ""), "[REDACTED]").replace(creds.get("secret", ""), "[REDACTED]")
+            raise RuntimeError(f"GDAL S3 range extraction failed for GRD VV (code {res_vv.returncode}): {err_clean[:200]}")
+
+        if s3_vh:
+            cmd_vh = [
+                gdal_bin,
+                "-outsize", "2048", "0",
+                "-r", "bilinear",
+                "-co", "COMPRESS=DEFLATE",
+                s3_vh,
+                str(out_vh),
+            ]
+            subprocess.run(cmd_vh, capture_output=True, text=True, env=child_env, timeout=120.0)
+
+        vv_arr = np.array(Image.open(str(out_vv))).astype(np.float32)
+        vh_arr = np.array(Image.open(str(out_vh))).astype(np.float32) if out_vh.exists() and out_vh.stat().st_size > 0 else None
+
+        pre = SARPreprocessor(tile_size=640, tile_overlap=64)
+        fused = pre.prepare_multichannel_sar(vv_arr, vh_arr)
+        Image.fromarray(fused).save(str(fused_raster))
+        logger.info("Successfully acquired genuine Sentinel-1 GRD raster to %s (%d bytes)", fused_raster, fused_raster.stat().st_size)
+
+        return {
+            "raster_path": str(fused_raster),
+            "metadata": scene_metadata or {},
         }

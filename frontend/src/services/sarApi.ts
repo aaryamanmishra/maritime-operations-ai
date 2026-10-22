@@ -33,7 +33,7 @@ export interface SARSceneSummary {
   scene_metadata?: Record<string, any>;
 }
 
-export type MatchStatus = "AIS-MATCHED" | "AIS-UNMATCHED";
+export type MatchStatus = "AIS-MATCHED" | "AIS-UNMATCHED" | "AIS COMPARISON UNAVAILABLE";
 
 export interface SARDetectionItem {
   detection_id: string;
@@ -101,6 +101,7 @@ export interface SARJobResponse {
   detections_count: number;
   matched_count: number;
   unmatched_count: number;
+  coverage_unavailable_count?: number;
   created_at: string;
   completed_at?: string;
   detections: SARDetectionItem[];

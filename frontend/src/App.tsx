@@ -66,7 +66,13 @@ export const App: React.FC = () => {
       />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', borderBottom: '1px solid #334155', flexShrink: 0 }}>
-        <Navigation activeModule={activeModule} onSelectModule={setActiveModule} />
+        <Navigation
+          activeModule={activeModule}
+          onSelectModule={(mod) => {
+            setActivePickingMode(null);
+            setActiveModule(mod);
+          }}
+        />
         <div style={{ paddingRight: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button
             onClick={() => setShowDiagnostics((prev) => !prev)}
@@ -99,6 +105,7 @@ export const App: React.FC = () => {
       {/* Map shell: fills all remaining vertical space, panels float absolutely over the map */}
       <main style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
         <MaritimeMap
+          activeModule={activeModule}
           onStatusChange={setIngestionStatus}
           routeResponse={routeResponse}
           origin={origin}

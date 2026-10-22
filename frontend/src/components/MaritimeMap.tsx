@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Vessel, VesselDetails, PipelineStatus, IngestionStatus } from '../types';
+import { Vessel, VesselDetails, PipelineStatus, IngestionStatus, ActiveModule } from '../types';
 import { fetchVesselsInBbox, fetchVesselDetails, fetchPipelineStatus } from '../services/api';
 import { VesselDetailPanel } from './VesselDetailPanel';
 
@@ -9,6 +9,7 @@ import { RouteOptimizationResponse, GeoCoordinate } from '../services/routingApi
 import { SARSceneSummary, SARDetectionItem } from '../services/sarApi';
 
 interface MaritimeMapProps {
+  activeModule?: ActiveModule;
   onStatusChange?: (status: IngestionStatus) => void;
   routeResponse?: RouteOptimizationResponse | null;
   origin?: GeoCoordinate | null;
@@ -28,6 +29,7 @@ const DEFAULT_ZOOM = 7.5;
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
 export const MaritimeMap: React.FC<MaritimeMapProps> = ({
+  activeModule = 'traffic',
   onStatusChange,
   routeResponse,
   origin,
@@ -54,6 +56,9 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
 
   const onSelectDetectionRef = useRef(onSelectDetection);
   onSelectDetectionRef.current = onSelectDetection;
+
+  const activeModuleRef = useRef(activeModule);
+  activeModuleRef.current = activeModule;
 
   const [vessels, setVessels] = useState<Map<number, Vessel>>(new Map());
   const [selectedMmsi, setSelectedMmsi] = useState<number | null>(null);
@@ -89,6 +94,15 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
   useEffect(() => {
     onStatusChange?.(ingestionStatus);
   }, [ingestionStatus, onStatusChange]);
+
+  // Clean up selected vessel details and trajectory track on module switch
+  useEffect(() => {
+    if (activeModule && activeModule !== 'traffic') {
+      setSelectedMmsi(null);
+      setSelectedVessel(null);
+      updateTrackLayer([]);
+    }
+  }, [activeModule]);
 
   // Sync pipeline diagnostics every 5 seconds
   useEffect(() => {
@@ -320,7 +334,7 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
         },
       });
 
-      // 1c. Weather-Aware Route Layer (Vibrant Cyan Glow)
+      // 1c. Weather-Aware Route Layer (Vibrant Emerald Glow)
       map.addSource('route-opt-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -331,9 +345,9 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
         source: 'route-opt-source',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: {
-          'line-color': '#00f0ff',
+          'line-color': '#10B981',
           'line-width': 3.5,
-          'line-opacity': 0.9,
+          'line-opacity': 0.95,
         },
       });
 
@@ -423,7 +437,9 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
             'case',
             ['==', ['get', 'match_status'], 'AIS-MATCHED'],
             '#10b981',
-            '#f59e0b'
+            ['==', ['get', 'match_status'], 'AIS-UNMATCHED'],
+            '#f59e0b',
+            '#64748b'
           ],
           'circle-stroke-width': [
             'case',
@@ -500,6 +516,7 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
 
       // Click on vessel marker
       map.on('click', 'vessels-circle', (e: any) => {
+        if (activeModuleRef.current && activeModuleRef.current !== 'traffic') return;
         if (activePickingModeRef.current) return;
         if (!e.features || !e.features[0]) return;
         const clickedMmsi = Number(e.features[0].properties?.mmsi);
@@ -911,16 +928,18 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
         </div>
       )}
 
-      {/* Selected Vessel Slideout Panel */}
-      <VesselDetailPanel
-        vessel={selectedVessel}
-        loading={loadingDetails}
-        onClose={() => {
-          setSelectedMmsi(null);
-          setSelectedVessel(null);
-          updateTrackLayer([]);
-        }}
-      />
+      {/* Selected Vessel Slideout Panel (only visible when active module is Live Vessel Traffic) */}
+      {(!activeModule || activeModule === 'traffic') && (
+        <VesselDetailPanel
+          vessel={selectedVessel}
+          loading={loadingDetails}
+          onClose={() => {
+            setSelectedMmsi(null);
+            setSelectedVessel(null);
+            updateTrackLayer([]);
+          }}
+        />
+      )}
     </div>
   );
 };

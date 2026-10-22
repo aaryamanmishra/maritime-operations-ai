@@ -168,21 +168,15 @@ class SARAnalysisService:
                 )
                 db_scene = res.scalar_one_or_none()
 
-            # If not in DB, resolve metadata
-            if not db_scene:
+            # If not in DB or DB record lacks S3 assets, resolve metadata
+            need_metadata = (
+                not db_scene
+                or not db_scene.scene_metadata
+                or ("s3_vv" not in db_scene.scene_metadata and "s3_xml" not in db_scene.scene_metadata)
+            )
+            if need_metadata:
                 if not scene_summary:
-                    # Query catalog for this specific scene ID
-                    now = datetime.now(UTC)
-                    candidates = await self.catalog_client.search_scenes(
-                        bbox=(-180.0, -90.0, 180.0, 90.0),
-                        start_time=now - timedelta(days=90),
-                        end_time=now,
-                        limit=50,
-                    )
-                    for c in candidates:
-                        if c.scene_id == scene_id:
-                            scene_summary = c
-                            break
+                    scene_summary = await self.catalog_client.get_scene_by_id(scene_id, modality=mod_upper)
 
                 if not scene_summary:
                     # Construct fallback scene summary from ID
@@ -201,26 +195,30 @@ class SARAnalysisService:
                         source="Copernicus CDSE",
                     )
 
-                # Persist scene in PostgreSQL
+                # Persist or update scene in PostgreSQL
                 async with session_factory() as session:
                     footprint_wkt = (
                         f"SRID=4326;POLYGON(({', '.join(f'{pt[0]} {pt[1]}' for pt in scene_summary.footprint['coordinates'][0])}))"
                     )
-                    new_scene = SARScene(
-                        scene_id=scene_summary.scene_id,
-                        acquisition_time=scene_summary.acquisition_time,
-                        platform=scene_summary.platform,
-                        orbit_pass=scene_summary.orbit_pass,
-                        orbit_number=scene_summary.orbit_number,
-                        footprint=footprint_wkt,
-                        processing_level=scene_summary.processing_level,
-                        polarization=scene_summary.polarization,
-                        source=scene_summary.source,
-                        scene_metadata=scene_summary.scene_metadata,
-                    )
-                    session.add(new_scene)
+                    if db_scene:
+                        db_scene.scene_metadata = dict(scene_summary.scene_metadata or {})
+                        session.add(db_scene)
+                    else:
+                        new_scene = SARScene(
+                            scene_id=scene_summary.scene_id,
+                            acquisition_time=scene_summary.acquisition_time,
+                            platform=scene_summary.platform,
+                            orbit_pass=scene_summary.orbit_pass,
+                            orbit_number=scene_summary.orbit_number,
+                            footprint=footprint_wkt,
+                            processing_level=scene_summary.processing_level,
+                            polarization=scene_summary.polarization,
+                            source=scene_summary.source,
+                            scene_metadata=scene_summary.scene_metadata,
+                        )
+                        session.add(new_scene)
+                        db_scene = new_scene
                     await session.commit()
-                    db_scene = new_scene
 
             # 2. PREPROCESSING PHASE
             job.status = SARJobStatus.PREPROCESSING
@@ -232,12 +230,19 @@ class SARAnalysisService:
             os.makedirs(cache_dir, exist_ok=True)
             raster_path = os.path.join(cache_dir, "scene_fused.png")
 
+            effective_metadata: dict[str, Any] = {}
+            if scene_summary and scene_summary.scene_metadata:
+                effective_metadata.update(scene_summary.scene_metadata)
+            elif db_scene and db_scene.scene_metadata:
+                effective_metadata.update(db_scene.scene_metadata)
+
             burst_meta: dict[str, Any] = {}
             if mod_upper == "SLC":
                 # Real SLC burst acquisition fails explicitly if credentials, GDAL, or data are missing.
                 burst_data = await self.acquisition_client.acquire_slc_burst(
                     scene_id=scene_id,
                     target_dir=f"data/sar_cache/{mod_upper.lower()}",
+                    scene_metadata=effective_metadata,
                 )
                 r_path = burst_data.get("raster_path")
                 if r_path and os.path.exists(r_path) and os.path.getsize(r_path) > 0:
@@ -249,24 +254,30 @@ class SARAnalysisService:
                 if not burst_meta:
                     raise RuntimeError(f"SLC burst acquisition produced no valid metadata for scene {scene_id}")
 
+                effective_metadata.update(burst_meta)
                 if scene_summary:
                     scene_summary.scene_metadata.update(burst_meta)
 
-            if not os.path.exists(raster_path) and mod_upper == "GRD":
-                # If CDSE credentials are configured and download URL exists, attempt download
-                if self.acquisition_client.is_configured() and scene_summary and scene_summary.download_url:
-                    try:
-                        await self.acquisition_client.download_asset(
-                            download_url=scene_summary.download_url,
-                            target_path=raster_path,
-                            max_bytes=80 * 1024 * 1024,
-                        )
-                    except Exception as dl_err:
-                        logger.warning("CDSE direct asset download deferred: %s", dl_err)
+            is_real_scene = bool(scene_id and scene_id.startswith("S1") and "DEMO" not in scene_id.upper())
+            if not os.path.exists(raster_path) and mod_upper == "GRD" and is_real_scene:
+                grd_data = await self.acquisition_client.acquire_grd_scene(
+                    scene_id=scene_id,
+                    scene_metadata=effective_metadata,
+                    target_dir=f"data/sar_cache/{mod_upper.lower()}",
+                )
+                r_path = grd_data.get("raster_path")
+                if r_path and os.path.exists(r_path) and os.path.getsize(r_path) > 0:
+                    raster_path = r_path
 
-            # Strictly separate fallback sample images by modality (GRD offline demo fallback only)
+            # Strictly separate fallback sample images by modality (offline demo fallback only)
+            is_real_scene = bool(scene_id and scene_id.startswith("S1") and "DEMO" not in scene_id.upper())
             if not os.path.exists(raster_path):
-                if mod_upper == "SLC":
+                if is_real_scene:
+                    raise RuntimeError(
+                        f"{mod_upper} raster data unavailable for real observation {scene_id}: "
+                        "cannot execute vessel detection on missing or synthetic SAR data"
+                    )
+                elif mod_upper == "SLC":
                     raise RuntimeError(
                         f"SLC raster data unavailable for {scene_id}: cannot execute vessel detection on missing SAR data"
                     )
@@ -280,9 +291,14 @@ class SARAnalysisService:
                                 shutil.copy2(os.path.join(candidate_dir, sample_files[0]), raster_path)
                                 break
 
-            # If still missing, generate deterministic synthetic backscatter array (GRD offline demo fallback only)
+            # If still missing, generate deterministic synthetic backscatter array (offline demo fallback only)
             if not os.path.exists(raster_path):
-                if mod_upper == "SLC":
+                if is_real_scene:
+                    raise RuntimeError(
+                        f"{mod_upper} raster data unavailable for real observation {scene_id}: "
+                        "cannot execute vessel detection on synthetic data"
+                    )
+                elif mod_upper == "SLC":
                     raise RuntimeError(
                         f"SLC raster data unavailable for {scene_id}: cannot execute vessel detection on synthetic data"
                     )
@@ -306,7 +322,8 @@ class SARAnalysisService:
             footprint_geom = scene_summary.footprint if scene_summary else {"type": "Polygon", "coordinates": [[[-0.5, 50.0], [1.5, 50.2], [1.3, 50.9], [-0.7, 50.7], [-0.5, 50.0]]]}
             corner_coords = SARGeoreferencer.extract_corners_from_footprint(footprint_geom)
 
-            effective_metadata = dict(scene_summary.scene_metadata) if scene_summary else dict(burst_meta)
+            if scene_summary and scene_summary.scene_metadata:
+                effective_metadata.update(scene_summary.scene_metadata)
             if burst_meta:
                 effective_metadata.update(burst_meta)
 
@@ -329,6 +346,7 @@ class SARAnalysisService:
             detection_items: list[SARDetectionItem] = []
             matched_count = 0
             unmatched_count = 0
+            coverage_unavailable_count = 0
 
             async with session_factory() as session:
                 for det in detections:
@@ -346,8 +364,10 @@ class SARAnalysisService:
                     match_status = corr_result["match_status"]
                     if match_status == MatchStatus.MATCHED:
                         matched_count += 1
-                    else:
+                    elif match_status == MatchStatus.UNMATCHED:
                         unmatched_count += 1
+                    else:
+                        coverage_unavailable_count += 1
 
                     # Persist SARDetection and AISSARCorrelation
                     geom_wkt = f"SRID=4326;POINT({lon} {lat})"
@@ -425,20 +445,28 @@ class SARAnalysisService:
             operational_vessels = [d for d in detection_items if d.is_operational_vessel]
             clutter_candidates = [d for d in detection_items if not d.is_operational_vessel]
 
+            summary_parts = [
+                f"{matched_count} AIS-MATCHED",
+                f"{unmatched_count} AIS-UNMATCHED",
+            ]
+            if coverage_unavailable_count > 0:
+                summary_parts.append(f"{coverage_unavailable_count} AIS COVERAGE UNAVAILABLE")
+            summary_str = ", ".join(summary_parts)
+
             if clutter_candidates:
                 job.message = (
-                    f"Analysis complete: {len(operational_vessels)} operational vessels detected "
-                    f"({matched_count} AIS-MATCHED, {unmatched_count} AIS-UNMATCHED, "
-                    f"{len(clutter_candidates)} terrestrial clutter candidates flagged)"
+                    f"Analysis complete: {len(operational_vessels)} operational surface contacts detected "
+                    f"({summary_str}, {len(clutter_candidates)} terrestrial clutter candidates flagged)"
                 )
             else:
-                job.message = f"Analysis complete: {len(detection_items)} vessels detected ({matched_count} AIS-MATCHED, {unmatched_count} AIS-UNMATCHED)"
+                job.message = f"Analysis complete: {len(detection_items)} vessels detected ({summary_str})"
 
             job.status = SARJobStatus.COMPLETE
             job.progress_percent = 100
             job.detections_count = len(operational_vessels) if mod_upper == "SLC" else len(detection_items)
             job.matched_count = matched_count
             job.unmatched_count = unmatched_count
+            job.coverage_unavailable_count = coverage_unavailable_count
             job.completed_at = datetime.now(UTC)
             job.detections = detection_items
 

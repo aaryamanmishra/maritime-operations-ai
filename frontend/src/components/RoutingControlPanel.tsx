@@ -308,6 +308,18 @@ export const RoutingControlPanel: React.FC<RoutingControlPanelProps> = ({
             </span>
           </div>
 
+          {/* Route Visual Legend */}
+          <div className="flex items-center gap-4 px-2.5 py-1.5 bg-slate-950/80 rounded border border-slate-800 text-[10px]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-1 rounded bg-[#10B981] inline-block" />
+              <span className="text-emerald-400 font-medium">Weather-Optimized</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 border-t border-dashed border-slate-400 inline-block" />
+              <span className="text-slate-400 font-medium">Baseline Corridor</span>
+            </div>
+          </div>
+
           {/* Metric Comparison Table */}
           <div className="bg-slate-950/70 p-2.5 rounded border border-slate-800 space-y-2">
             <div className="grid grid-cols-3 gap-1 text-[11px]">

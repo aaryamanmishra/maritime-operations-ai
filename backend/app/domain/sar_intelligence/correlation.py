@@ -142,22 +142,57 @@ class AISSARCorrelationEngine:
                 "provenance": provenance,
             }
 
-        # No candidate correlated
-        provenance = {
-            "explanation": (
+        # No candidate correlated within primary thresholds.
+        # Check if suitable time-matched AIS coverage exists for this observation window and region.
+        coverage_query = text("""
+            WITH cov_sample AS (
+                SELECT timestamp, geom FROM current_vessel_state
+                UNION ALL
+                SELECT timestamp, geom FROM vessel_position_history
+            )
+            SELECT 1 FROM cov_sample
+            WHERE timestamp BETWEEN :cov_start AND :cov_end
+              AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography, :cov_dist_m)
+            LIMIT 1;
+        """)
+        cov_res = await session.execute(
+            coverage_query,
+            {
+                "lat": lat,
+                "lon": lon,
+                "cov_start": acquisition_time - timedelta(minutes=60),
+                "cov_end": acquisition_time + timedelta(minutes=60),
+                "cov_dist_m": 100000.0,  # 100 km regional coverage
+            },
+        )
+        has_coverage = cov_res.fetchone() is not None
+
+        if has_coverage:
+            match_status = MatchStatus.UNMATCHED
+            explanation = (
                 f"No broadcasting AIS vessel correlated within {self.max_distance_km} km "
-                f"and ±{self.time_window_minutes} minutes of SAR observation."
-            ),
+                f"and ±{self.time_window_minutes} minutes of SAR observation (regional AIS coverage active)."
+            )
+        else:
+            match_status = MatchStatus.COMPARISON_UNAVAILABLE
+            explanation = (
+                "Historical AIS data coverage unavailable in database for observation timestamp and area; "
+                "transponder correlation cannot be evaluated."
+            )
+
+        provenance = {
+            "explanation": explanation,
             "matching_thresholds": {
                 "max_distance_km": self.max_distance_km,
                 "max_time_window_minutes": self.time_window_minutes,
             },
             "sar_acquisition_time": acquisition_time.isoformat(),
             "algorithm_version": "spatiotemporal-geodetic-v1",
+            "has_time_matched_ais_coverage": has_coverage,
         }
 
         return {
-            "match_status": MatchStatus.UNMATCHED,
+            "match_status": match_status,
             "candidate_mmsi": None,
             "distance_km": None,
             "time_difference_seconds": None,
