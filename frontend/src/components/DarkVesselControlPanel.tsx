@@ -15,6 +15,8 @@ interface DarkVesselControlPanelProps {
   onDetectionsLoaded: (detections: SARDetectionItem[]) => void;
   onSelectDetection: (detection: SARDetectionItem | null) => void;
   selectedDetection: SARDetectionItem | null;
+  selectedScene?: SARSceneSummary | null;
+  initialDetections?: SARDetectionItem[];
 }
 
 export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
@@ -22,6 +24,8 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
   onDetectionsLoaded,
   onSelectDetection,
   selectedDetection,
+  selectedScene: selectedSceneProp,
+  initialDetections,
 }) => {
   // Search parameters
   const [minLon, setMinLon] = useState<number>(-2.0);
@@ -43,14 +47,22 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
   const [searching, setSearching] = useState<boolean>(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [scenes, setScenes] = useState<SARSceneSummary[]>([]);
-  const [selectedScene, setSelectedScene] = useState<SARSceneSummary | null>(null);
+  const [selectedScene, setSelectedScene] = useState<SARSceneSummary | null>(selectedSceneProp || null);
 
   // Job execution state
   const [activeJob, setActiveJob] = useState<SARJobResponse | null>(null);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [jobError, setJobError] = useState<string | null>(null);
-  const [detections, setDetections] = useState<SARDetectionItem[]>([]);
+  const [detections, setDetections] = useState<SARDetectionItem[]>(initialDetections || []);
   const [showClutterDiagnostics, setShowClutterDiagnostics] = useState<boolean>(true);
+
+  React.useEffect(() => {
+    if (selectedSceneProp) setSelectedScene(selectedSceneProp);
+  }, [selectedSceneProp]);
+
+  React.useEffect(() => {
+    if (initialDetections && initialDetections.length > 0) setDetections(initialDetections);
+  }, [initialDetections]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();

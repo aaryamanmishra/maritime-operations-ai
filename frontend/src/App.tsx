@@ -119,6 +119,7 @@ export const App: React.FC = () => {
         />
         {activeModule === 'routing' && (
           <RoutingControlPanel
+            routeResponse={routeResponse}
             onRouteCalculated={setRouteResponse}
             activePickingMode={activePickingMode}
             onSetPickingMode={setActivePickingMode}
@@ -130,6 +131,8 @@ export const App: React.FC = () => {
         )}
         {activeModule === 'dark-vessel' && (
           <DarkVesselControlPanel
+            selectedScene={selectedSARScene}
+            initialDetections={sarDetections}
             onSceneSelect={setSelectedSARScene}
             onDetectionsLoaded={setSARDetections}
             onSelectDetection={setSelectedDetection}

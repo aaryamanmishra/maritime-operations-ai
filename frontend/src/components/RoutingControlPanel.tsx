@@ -10,6 +10,7 @@ import {
 } from "../services/routingApi";
 
 interface RoutingControlPanelProps {
+  routeResponse?: RouteOptimizationResponse | null;
   onRouteCalculated: (response: RouteOptimizationResponse | null) => void;
   activePickingMode: "origin" | "destination" | null;
   onSetPickingMode: (mode: "origin" | "destination" | null) => void;
@@ -20,6 +21,7 @@ interface RoutingControlPanelProps {
 }
 
 export const RoutingControlPanel: React.FC<RoutingControlPanelProps> = ({
+  routeResponse,
   onRouteCalculated,
   activePickingMode,
   onSetPickingMode,
@@ -42,8 +44,14 @@ export const RoutingControlPanel: React.FC<RoutingControlPanelProps> = ({
 
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<RouteOptimizationResponse | null>(null);
+  const [result, setResult] = useState<RouteOptimizationResponse | null>(routeResponse || null);
   const [showSegments, setShowSegments] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (routeResponse) {
+      setResult(routeResponse);
+    }
+  }, [routeResponse]);
 
   // Set default initial coordinates (Brest to Dover)
   useEffect(() => {
