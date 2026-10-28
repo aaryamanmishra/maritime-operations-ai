@@ -17,6 +17,11 @@ class SARTile:
         parent_width: int,
         parent_height: int,
         modality: str = "GRD",
+        padding: dict[str, int] | None = None,
+        valid_width: int | None = None,
+        valid_height: int | None = None,
+        scale_x: float = 1.0,
+        scale_y: float = 1.0,
     ):
         self.tile_index = tile_index
         self.image_array = image_array  # uint8 (H, W, 3)
@@ -27,6 +32,11 @@ class SARTile:
         self.parent_width = parent_width
         self.parent_height = parent_height
         self.modality = modality.upper()
+        self.padding = padding or {"top": 0, "left": 0, "right": 0, "bottom": 0}
+        self.valid_width = valid_width if valid_width is not None else width
+        self.valid_height = valid_height if valid_height is not None else height
+        self.scale_x = scale_x
+        self.scale_y = scale_y
 
 
 class SARPreprocessor:
@@ -152,6 +162,85 @@ class SARPreprocessor:
             self.tile_size,
             w,
             h,
+        )
+        return tiles
+
+    def generate_native_chips(
+        self,
+        raster_image: np.ndarray,
+        window_x_offset: int = 0,
+        window_y_offset: int = 0,
+        parent_width: int | None = None,
+        parent_height: int | None = None,
+        stride: int = 576,
+        chip_size: int = 640,
+        modality: str = "GRD",
+    ) -> list[SARTile]:
+        """
+        Generate overlapping native-resolution chips of size (chip_size x chip_size)
+        from a bounded raster window array (H, W, 3) using a configurable stride (default 576, 10% overlap).
+
+        Boundary Handling:
+        Partial boundary chips are padded with zeros to ensure constant input shape (640, 640, 3)
+        while explicitly tracking padding offsets (pad_right, pad_bottom, valid_width, valid_height)
+        so that subsequent detection processing can reject padding artifacts and unpad coordinates.
+        """
+        h, w = raster_image.shape[:2]
+        p_w = parent_width or (window_x_offset + w)
+        p_h = parent_height or (window_y_offset + h)
+
+        tiles: list[SARTile] = []
+        tile_idx = 0
+
+        # Step through image using stride
+        for y in range(0, h, stride):
+            for x in range(0, w, stride):
+                win_w = min(chip_size, w - x)
+                win_h = min(chip_size, h - y)
+
+                sub_chip = raster_image[y : y + win_h, x : x + win_w, :]
+
+                pad_right = chip_size - win_w
+                pad_bottom = chip_size - win_h
+
+                if pad_right > 0 or pad_bottom > 0:
+                    padded_chip = np.zeros((chip_size, chip_size, 3), dtype=np.uint8)
+                    padded_chip[:win_h, :win_w, :] = sub_chip
+                    chip_array = padded_chip
+                else:
+                    chip_array = sub_chip
+
+                tiles.append(
+                    SARTile(
+                        tile_index=tile_idx,
+                        image_array=chip_array,
+                        x_offset=window_x_offset + x,
+                        y_offset=window_y_offset + y,
+                        width=chip_size,
+                        height=chip_size,
+                        parent_width=p_w,
+                        parent_height=p_h,
+                        modality=modality,
+                        padding={"top": 0, "left": 0, "right": pad_right, "bottom": pad_bottom},
+                        valid_width=win_w,
+                        valid_height=win_h,
+                        scale_x=1.0,
+                        scale_y=1.0,
+                    )
+                )
+                tile_idx += 1
+
+        logger.info(
+            "Generated %d native %s chips of size %dx%d (stride=%d) from window %dx%d at offset (%d, %d)",
+            len(tiles),
+            modality.upper(),
+            chip_size,
+            chip_size,
+            stride,
+            w,
+            h,
+            window_x_offset,
+            window_y_offset,
         )
         return tiles
 

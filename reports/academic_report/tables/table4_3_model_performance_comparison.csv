@@ -1,0 +1,8 @@
+Model Identifier,Modality,Evaluation Dataset & Split,Image Count,Precision (%),Recall (%),mAP@50 (%),mAP@50-95 (%),Inference Latency,Operational Status
+YOLOv8s-LS-SSDD-v1.0,GRD,LS-SSDD Held-Out Test (Scenes 11-15),"3,000",80.70%,61.60%,69.00%,25.70%,18.4 ms (GPU),Accepted Benchmark Candidate
+YOLO11n (Phase 6 Production),GRD,LS-SSDD Held-Out Test (Scenes 11-15),"3,000",76.58%,62.42%,63.52%,21.81%,121.5 ms (CPU),Active Production GRD Detector
+OpenSAR Baseline (YOLO11s),SLC,OpenSAR Insight Held-Out Test,950,51.74%,45.15%,39.41%,12.25%,57.1 ms (CPU),Active Deployed SLC Model
+OpenSAR Paper (YOLO11s),SLC,OpenSAR Insight Held-Out Test,950,41.57%,39.14%,33.40%,10.16%,42.8 ms (CPU),Experimental (Archived Subordinate)
+YOLOv3 (Zhang et al. 2020),GRD,LS-SSDD Held-Out Test (Scenes 11-15),"3,000",75.20%,64.10%,69.40%,N/A,N/A,Published Paper Baseline
+Faster R-CNN (Zhang et al. 2020),GRD,LS-SSDD Held-Out Test (Scenes 11-15),"3,000",77.80%,67.20%,71.60%,N/A,N/A,Published Paper SOTA Two-Stage
+Classical CFAR Baseline,GRD,OpenSAR / LS-SSDD High Clutter,100,31.20%,48.60%,24.10%,N/A,450.0 ms (CPU),Algorithmic Fallback Baseline

@@ -177,8 +177,17 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
       : operationalDetections.length;
 
   const matchedCount = operationalDetections.filter((d) => d.match_status === "AIS-MATCHED").length;
-  const unmatchedCount = operationalDetections.filter((d) => d.match_status === "AIS-UNMATCHED").length;
-  const noCoverageCount = operationalDetections.filter((d) => d.match_status === "AIS COMPARISON UNAVAILABLE").length;
+  const darkVesselCount = operationalDetections.filter((d) => d.match_status === "DARK-VESSEL-CANDIDATE").length;
+  const reviewRequiredCount = operationalDetections.filter((d) => d.match_status === "DETECTION-REVIEW-REQUIRED").length;
+  const unmatchedCount = operationalDetections.filter(
+    (d) => d.match_status === "AIS-UNMATCHED" || d.match_status === "DARK-VESSEL-CANDIDATE"
+  ).length;
+  const noCoverageCount = operationalDetections.filter(
+    (d) =>
+      d.match_status === "AIS COMPARISON UNAVAILABLE" ||
+      d.match_status === "AIS-COMPARISON-UNAVAILABLE" ||
+      d.match_status === "AIS-UNMATCHED-INSUFFICIENT-COVERAGE"
+  ).length;
   const clutterCount = clutterCandidates.length;
 
   return (
@@ -499,6 +508,10 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
                           className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                             isMatched
                               ? "bg-emerald-900/80 text-emerald-300 border border-emerald-700/60"
+                              : det.match_status === "DARK-VESSEL-CANDIDATE"
+                              ? "bg-rose-950/90 text-rose-300 border border-rose-500/80"
+                              : det.match_status === "DETECTION-REVIEW-REQUIRED"
+                              ? "bg-cyan-950/90 text-cyan-300 border border-cyan-600/80"
                               : det.match_status === "AIS-UNMATCHED"
                               ? "bg-amber-900/80 text-amber-300 border border-amber-700/60"
                               : "bg-slate-800 text-slate-300 border border-slate-600"
@@ -517,6 +530,12 @@ export const DarkVesselControlPanel: React.FC<DarkVesselControlPanelProps> = ({
                         <span className="text-emerald-400 font-mono">
                           MMSI: {det.candidate_mmsi} ({det.distance_km} km)
                         </span>
+                      ) : det.match_status === "DARK-VESSEL-CANDIDATE" ? (
+                        <span className="text-rose-400 font-semibold">Active AIS Area: Confirmed Dark Vessel Candidate</span>
+                      ) : det.match_status === "DETECTION-REVIEW-REQUIRED" ? (
+                        <span className="text-cyan-400 font-semibold">Soft Decision Boundary: Manual Review Required</span>
+                      ) : det.match_status === "AIS-UNMATCHED-INSUFFICIENT-COVERAGE" ? (
+                        <span className="text-amber-400/80 font-medium">Sparse AIS Coverage: Unconfirmed</span>
                       ) : det.match_status === "AIS-UNMATCHED" ? (
                         <span className="text-amber-400/90 font-medium">Uncorrelated Contact (Dark Vessel Target)</span>
                       ) : (

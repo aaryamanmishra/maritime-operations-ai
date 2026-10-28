@@ -1,0 +1,27 @@
+flowchart LR
+    subgraph FULL_SCENE["Sentinel-1 Full Swath GeoTIFF (e.g. 25000 x 16500 pixels)"]
+        direction TB
+        SceneMap["Swath Image Array: 10m x 10m Ground Range Resolution"]
+        TileGrid["Regular Overlapping Grid: Tile Width = 640 px, Tile Height = 640 px, Stride = 576 px (Overlap = 64 px)"]
+    end
+
+    subgraph SLICE_PROCESS["Chip Extraction Engine"]
+        direction TB
+        ExtractWindow["Extract Window at [y:y+640, x:x+640]"]
+        PadCheck{"Window at Border? (w < 640 or h < 640)"}
+        ZeroPad["Zero-Pad Edge with Background Ocean Clutter"]
+        RecordOffset["Record Local-to-Global Coordinate Offsets: (x_offset, y_offset)"]
+    end
+
+    subgraph OUTPUT_BATCH["Batched Radar Chips for Detector"]
+        Chip1["Chip (0, 0)"]
+        Chip2["Chip (576, 0)"]
+        ChipN["Chip (x_k, y_k)"]
+    end
+
+    SceneMap --> TileGrid
+    TileGrid --> ExtractWindow
+    ExtractWindow --> PadCheck
+    PadCheck -- Yes --> ZeroPad --> RecordOffset
+    PadCheck -- No --> RecordOffset
+    RecordOffset --> Chip1 & Chip2 & ChipN

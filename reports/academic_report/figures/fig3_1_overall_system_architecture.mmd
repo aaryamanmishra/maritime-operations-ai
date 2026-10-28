@@ -1,0 +1,41 @@
+graph TB
+    subgraph SATELLITE_DATA["Copernicus Sentinel-1 SAR Constellation"]
+        S1A["Sentinel-1A / 1C SAR"] -->|C-Band 5.405 GHz radar swath| CDSE["Copernicus Data Space Ecosystem (CDSE)"]
+    end
+
+    subgraph AIS_INGESTION["Terrestrial and Satellite AIS Stream"]
+        AIS_STREAM["AISStream.io WebSocket / NMEA Hub"] -->|AIVDM/AIVDO JSON frames| WORKER["AIS Ingestion Worker (Python/AsyncIO)"]
+    end
+
+    subgraph BACKEND_PLATFORM["Maritime Operations AI Core (FastAPI / Python 3.12)"]
+        ACQ["Copernicus Acquisition Adapter"]
+        PREPROC["Radiometric Calibration and Native-Resolution Tiler"]
+        YOLO_DET["YOLO SAR Vessel Detector (YOLO11n / YOLOv8s)"]
+        GEOREF["GCP Piecewise Bilinear Georeferencer"]
+        CORR["Kinematic Uncertainty Correlation Engine"]
+        ROUTING["Weather Routing and TFT Vessel Performance Engine"]
+    end
+
+    subgraph PERSISTENCE["Geospatial Storage and Caching Layer"]
+        POSTGIS[("PostgreSQL 16 + PostGIS 3.4<br/>Spatial GIST Indices (EPSG:4326)")]
+        REDIS[("Redis 7 Alpine<br/>Geospatial Pub/Sub and Ephemeral Cache")]
+    end
+
+    subgraph OPERATIONAL_UI["Maritime Tactical Command Dashboard (React 19 / Vite)"]
+        MAP["MapLibre GL Vector Maritime Map (EPSG:4326)"]
+        PANEL_DARK["Dark-Vessel Tactical Control Panel"]
+        PANEL_TRAFFIC["Real-Time Vessel Traffic Monitor"]
+        PANEL_ROUTING["Weather-Optimal Voyage Routing Panel"]
+    end
+
+    CDSE -->|STAC API / OData Zip Download| ACQ
+    ACQ --> PREPROC
+    PREPROC -->|Native 640x640 Chips (Overlap=64px)| YOLO_DET
+    YOLO_DET -->|Pixel Bounding Boxes and Confidences| GEOREF
+    GEOREF -->|WGS84 Lon/Lat Coordinates| CORR
+    WORKER -->|Batch Upsert Vessel State| POSTGIS
+    WORKER -->|Stream Live Positions| REDIS
+    POSTGIS -->|Historical AIS Search (+-15 min, 3km)| CORR
+    CORR -->|AIS-MATCHED / AIS-UNMATCHED Candidates| POSTGIS
+    POSTGIS -->|REST API (JSON GeoJSON)| OPERATIONAL_UI
+    REDIS -->|WebSocket Live Updates| OPERATIONAL_UI

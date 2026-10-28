@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="400.0" y="30" class="title">Fig 3.8: Kinematic Uncertainty-Aware Spatiotemporal Correlation Flowchart</text>
+  
+  <defs>
+    <marker id="arr8" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect x="220" y="50" width="360" height="40" class="box-rect" />
+  <text x="400" y="75" class="box-title">SAR Detection Contact (Lat, Lon, T_sat)</text>
+
+  <line x1="400" y1="90" x2="400" y2="125" class="edge-line" marker-end="url(#arr8)" />
+
+  <rect x="200" y="125" width="400" height="45" class="box-rect" />
+  <text x="400" y="145" class="box-title">ST_DWithin PostGIS Candidate Query</text>
+  <text x="400" y="160" class="box-text">Window: [T_sat - 15m, T_sat + 15m] | Gate: 4500m</text>
+
+  <line x1="400" y1="170" x2="400" y2="205" class="edge-line" marker-end="url(#arr8)" />
+
+  <rect x="200" y="205" width="400" height="50" fill="#eff6ff" stroke="#2563eb" stroke-width="2" rx="6" />
+  <text x="400" y="227" class="box-title">Kinematic Dead Reckoning Projection</text>
+  <text x="400" y="243" class="box-text">est_pos = AIS_pos + SOG * dt * [cos COG, sin COG]</text>
+
+  <line x1="400" y1="255" x2="400" y2="290" class="edge-line" marker-end="url(#arr8)" />
+
+  <rect x="180" y="290" width="440" height="50" class="box-rect" />
+  <text x="400" y="312" class="box-title">Positional Uncertainty Budget Calculation</text>
+  <text x="400" y="328" class="box-text">sigma_total = sqrt(sigma_sar^2 + sigma_ais^2 + sigma_motion^2)</text>
+
+  <line x1="400" y1="340" x2="400" y2="375" class="edge-line" marker-end="url(#arr8)" />
+
+  <rect x="200" y="375" width="400" height="45" class="box-rect" />
+  <text x="400" y="395" class="box-title">Z-Score &amp; Gaussian Likelihood Score</text>
+  <text x="400" y="410" class="box-text">z = dist_m / sigma_total | score = exp(-0.5 * z^2)</text>
+
+  <line x1="400" y1="420" x2="400" y2="455" class="edge-line" marker-end="url(#arr8)" />
+
+  <rect x="220" y="455" width="360" height="40" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" rx="6" />
+  <text x="400" y="480" class="box-title">Decision Gate Evaluation &amp; Match Record</text>
+
+</svg>

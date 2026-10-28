@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import uuid
 from typing import Any, Optional
@@ -291,7 +292,9 @@ class YOLO26sVesselDetector:
             self.weights_path = weights_path or settings.SAR_MODEL_WEIGHTS_PATH
             self.model_version = "yolo26s-opensar-v1"
             candidates = [
+                "backend/ml/weights/ls_ssdd_yolov8s_20epoch_best.pt",
                 "backend/ml/weights/yolo26s_sar_vessel.pt",
+                "ml/weights/ls_ssdd_yolov8s_20epoch_best.pt",
                 "ml/weights/yolo26s_sar_vessel.pt",
             ]
             meta_candidates = [
@@ -345,6 +348,13 @@ class YOLO26sVesselDetector:
         elif isinstance(model_names, (list, tuple)) and len(model_names) > 0:
             self.class_names = {i: str(n) for i, n in enumerate(model_names)}
             self.num_classes = len(self.class_names)
+
+        meta_classes = self.metadata.get("classes")
+        if meta_classes and isinstance(meta_classes, dict) and len(meta_classes) > 0:
+            self.class_names = {int(k): str(v) for k, v in meta_classes.items()}
+            self.num_classes = len(self.class_names)
+        if self.class_names.get(0, "").lower() in ("ship", "item", "0", ""):
+            self.class_names[0] = "vessel"
 
         logger.info(
             "YOLO26s %s verified: task=%s, num_classes=%d, class_0=%s",
@@ -449,35 +459,65 @@ class YOLO26sVesselDetector:
                 confidence_threshold=confidence_threshold,
             )
 
+            valid_w = getattr(tile, "valid_width", None) or getattr(tile, "width", 640)
+            valid_h = getattr(tile, "valid_height", None) or getattr(tile, "height", 640)
+
             for det in tile_detections:
                 t_xmin, t_ymin, t_xmax, t_ymax = det["bounding_box"]
+
+                # Boundary & padding rejection: if detection falls completely within zero-padded edge
+                if t_xmin >= valid_w or t_ymin >= valid_h:
+                    logger.debug("Discarding detection box located in tile padding area: %s", det["bounding_box"])
+                    continue
+
+                # Clamp box to valid (unpadded) chip region
+                t_xmax = min(t_xmax, float(valid_w))
+                t_ymax = min(t_ymax, float(valid_h))
+                if t_xmax <= t_xmin or t_ymax <= t_ymin:
+                    continue
+
                 # Remap to global parent scene coordinate system
                 s_xmin = tile.x_offset + t_xmin
                 s_ymin = tile.y_offset + t_ymin
                 s_xmax = tile.x_offset + t_xmax
                 s_ymax = tile.y_offset + t_ymax
 
+                # Scene-boundary validation and clamping
+                if s_xmax <= 0 or s_ymax <= 0 or s_xmin >= parent_width or s_ymin >= parent_height:
+                    logger.debug(
+                        "Discarding detection box outside parent scene boundaries: [%s, %s, %s, %s]",
+                        s_xmin, s_ymin, s_xmax, s_ymax,
+                    )
+                    continue
+
+                s_xmin = max(0.0, min(float(parent_width), s_xmin))
+                s_xmax = max(0.0, min(float(parent_width), s_xmax))
+                s_ymin = max(0.0, min(float(parent_height), s_ymin))
+                s_ymax = max(0.0, min(float(parent_height), s_ymax))
+
+                if s_xmax <= s_xmin or s_ymax <= s_ymin:
+                    continue
+
                 center_x = (s_xmin + s_xmax) / 2.0
                 center_y = (s_ymin + s_ymax) / 2.0
 
-                if scene_metadata and "geolocation_grid_points" in scene_metadata and scene_metadata["geolocation_grid_points"]:
-                    x_off = float(scene_metadata.get("crop_x_offset", 0.0))
-                    y_off = float(scene_metadata.get("crop_y_offset", 0.0))
-                    lon, lat = SARGeoreferencer.pixel_to_lonlat_grid(
+                try:
+                    lon, lat = SARGeoreferencer.pixel_to_geographic(
                         x=center_x,
                         y=center_y,
-                        grid_points=scene_metadata["geolocation_grid_points"],
-                        x_offset=x_off,
-                        y_offset=y_off,
-                    )
-                else:
-                    lon, lat = SARGeoreferencer.pixel_to_lonlat_bilinear(
-                        x=center_x,
-                        y=center_y,
-                        width=parent_width,
-                        height=parent_height,
+                        metadata=scene_metadata,
+                        parent_width=parent_width,
+                        parent_height=parent_height,
                         corner_coords=corner_coords,
                     )
+                except Exception as e:
+                    logger.warning("Failed to georeference pixel (%s, %s): %s", center_x, center_y, e)
+                    continue
+
+                # Reject invalid / out-of-bounds geographic coordinates
+                if math.isnan(lat) or math.isnan(lon) or not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+                    logger.warning("Rejecting detection with out-of-bounds geographic coordinates: lat=%s, lon=%s", lat, lon)
+                    continue
 
                 # Estimate vessel length using modality-specific sensor geometry
                 scene_box = [float(s_xmin), float(s_ymin), float(s_xmax), float(s_ymax)]
@@ -485,6 +525,35 @@ class YOLO26sVesselDetector:
                     bbox=scene_box,
                     modality=self.modality,
                     metadata=scene_metadata,
+                )
+
+                # Determine if coordinates are already at full raster scale or need downsampling scale factor
+                is_native_parent = bool(
+                    parent_width
+                    and scene_metadata
+                    and (
+                        int(parent_width) == int(scene_metadata.get("original_width", 0))
+                        or getattr(tile, "scale_x", 1.0) == 1.0
+                    )
+                )
+                if is_native_parent:
+                    scale_x = 1.0
+                    scale_y = 1.0
+                    crop_x = 0.0
+                    crop_y = 0.0
+                else:
+                    scale_x = float(scene_metadata.get("scale_x", 1.0)) if scene_metadata else 1.0
+                    scale_y = float(scene_metadata.get("scale_y", 1.0)) if scene_metadata else 1.0
+                    crop_x = float(scene_metadata.get("crop_x_offset", 0.0)) if scene_metadata else 0.0
+                    crop_y = float(scene_metadata.get("crop_y_offset", 0.0)) if scene_metadata else 0.0
+
+                orig_x = center_x * scale_x + crop_x
+                orig_y = center_y * scale_y + crop_y
+
+                method = (
+                    "piecewise_gcp_grid" if (scene_metadata and scene_metadata.get("geolocation_grid_points"))
+                    else "geotransform_affine" if (scene_metadata and scene_metadata.get("geotransform"))
+                    else "bilinear_footprint"
                 )
 
                 detection_id = f"sar-det-{uuid.uuid4().hex[:12]}"
@@ -508,12 +577,21 @@ class YOLO26sVesselDetector:
                         "y_offset": tile.y_offset,
                         "width": getattr(tile, "width", 640),
                         "height": getattr(tile, "height", 640),
+                        "valid_width": valid_w,
+                        "valid_height": valid_h,
+                        "padding": getattr(tile, "padding", None),
                         "tile_bbox": [round(t_xmin, 1), round(t_ymin, 1), round(t_xmax, 1), round(t_ymax, 1)],
                     },
                     "coord_transform": {
                         "type": "tile_to_scene_translation",
                         "dx": tile.x_offset,
                         "dy": tile.y_offset,
+                        "scale_x": round(scale_x, 4),
+                        "scale_y": round(scale_y, 4),
+                        "raster_x": round(orig_x, 2),
+                        "raster_y": round(orig_y, 2),
+                        "georeference_method": method,
+                        "is_native_resolution": is_native_parent,
                     },
                     "model_version": self.model_version,
                     "modality": self.modality,

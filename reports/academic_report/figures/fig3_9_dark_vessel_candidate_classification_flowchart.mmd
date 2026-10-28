@@ -1,0 +1,16 @@
+flowchart TD
+    DetReady([SAR Vessel Detection Localized and Georeferenced]) --> SpatioTemporalMatching[Execute Spatiotemporal Kinematic Matching Engine]
+
+    SpatioTemporalMatching --> EvalOutcome{Matching Engine Classification Outcome}
+
+    EvalOutcome -- High Confidence Match --> Matched["AIS-MATCHED: Correlated with active AIS transponder. Record: MMSI, Name, SOG, COG, delta_t, distance"]
+    EvalOutcome -- Soft-Edge Boundary --> Ambiguous["AMBIGUOUS / DETECTION-REVIEW-REQUIRED: Candidate near decision gate (z between 2.5 and 4.0). Requires tactical analyst inspection"]
+    EvalOutcome -- No Match in Active Sector --> DarkVessel["AIS-UNMATCHED: Confirmed SAR target with active AIS coverage in 35km radius. Designation: Potential Dark-Vessel Candidate"]
+    EvalOutcome -- No Match in Unmonitored Sector --> NoCoverage["INSUFFICIENT-COVERAGE: No AIS receivers or active vessels detected within 35km. Designation: Unconfirmed Operational Sensor Blindspot"]
+
+    Matched --> TacticalAction1["Log Verified Traffic Track, Suppress Interdiction Alert"]
+    Ambiguous --> TacticalAction2["Highlight on Tactical Map with Amber Review Ring"]
+    DarkVessel --> TacticalAction3["Flag High-Priority Red Marker, Log Dark-Vessel Dossier"]
+    NoCoverage --> TacticalAction4["Render Gray Marker, Note Sensor Coverage Limitation"]
+
+    TacticalAction1 & TacticalAction2 & TacticalAction3 & TacticalAction4 --> AuditPersistence[("Persist in PostGIS: sar_detection and ais_sar_correlation")]

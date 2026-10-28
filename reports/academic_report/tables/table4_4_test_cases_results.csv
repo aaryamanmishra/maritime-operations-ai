@@ -1,0 +1,16 @@
+Test Module File,Total Test Cases,Passed,Failed,Execution Duration,Core Capabilities Verified
+tests/test_config.py,4,4,0,0.22s,"Environment variable parsing, default BBox limits, secret isolation"
+tests/test_db_redis.py,4,4,0,0.58s,"PostGIS async session connectivity, Redis ping, pipeline operations"
+tests/test_health.py,4,4,0,0.41s,FastAPI /api/health/live and /api/health/ready readiness probes
+tests/test_sar_acquisition.py,4,4,0,1.12s,"Copernicus CDSE STAC search, pagination, OData token handling"
+tests/test_sar_coordinates.py,9,9,0,0.35s,"GeoPoint invariants, WGS84 bounds, antimeridian normalization"
+tests/test_sar_geographic_context.py,9,9,0,0.84s,"Land-sea polygon mask filtering, coastal exclusion zones"
+tests/test_sar_georeferencing.py,6,6,0,0.92s,"GCP bisection search, piecewise bilinear grid coordinate transformation"
+tests/test_sar_intelligence.py,11,11,0,2.10s,"Job orchestration, async background tasks, detection persistence"
+tests/test_sar_phase3_e2e.py,6,6,0,2.85s,End-to-end pipeline: scene search -> download -> detect -> correlate
+tests/test_sar_phase4_native_inference.py,5,5,0,1.45s,"Native 640x640 sliding-window tiling, overlap handling, NMS"
+tests/test_sar_slc_pipeline.py,23,23,0,4.30s,"OpenSAR SLC dual-pol ingestion, SLC detector loading, opt-in flag"
+tests/test_sar_uncertainty_correlation.py,8,8,0,1.65s,"Kinematic dead reckoning, 3-component uncertainty budget, soft-edge gates"
+tests/test_vessel_api_integration.py,1,1,0,0.88s,"Live AIS API endpoints, GeoJSON formatting, HTTP response codes"
+tests/test_vessel_traffic.py,8,8,0,1.74s,"Vessel state upsert, historical track partitioning, Redis pub/sub"
+tests/test_weather_routing.py,7,7,0,2.79s,"TFT neural surrogate inference, Kwon wave degradation, Searoute path"

@@ -1,0 +1,22 @@
+flowchart TD
+    DetIn([SAR Detection: lat_sar, lon_sar, T_sat]) --> TimeGate["Construct Temporal Filter Window: T_start = T_sat - 15 min, T_end = T_sat + 15 min"]
+    TimeGate --> SpatialGate["PostGIS Spatial Candidate Query: ST_DWithin(geom::geography, ST_MakePoint(lon, lat), 4500m)"]
+
+    SpatialGate --> QueryDB[("Search current_vessel_state and vessel_position_history")]
+    QueryDB --> CandidatesCheck{"Any AIS Candidates Found?"}
+
+    CandidatesCheck -- No Candidates --> SectorCoverage{"Check Sector Coverage (35km radius): Any active AIS pings in sector?"}
+    SectorCoverage -- Active Sector --> DarkCandidate([Tag: AIS-UNMATCHED / Potential Dark-Vessel Candidate])
+    SectorCoverage -- Blindspot --> InsufficientCoverage([Tag: INSUFFICIENT-COVERAGE / Unconfirmed Sector])
+
+    CandidatesCheck -- Candidates Found --> LoopCandidates["For Each Candidate: Extract dt = T_sat - T_ais, SOG, COG"]
+    LoopCandidates --> DeadReckon["Kinematic Dead Reckoning Projection: est_pos = Pos + SOG * dt * [cos COG, sin COG]"]
+    DeadReckon --> GeodesicDist["Calculate Projected Distance: dist_m = Haversine(det, est_pos)"]
+
+    GeodesicDist --> UncertaintyBudget["Calculate Composite Uncertainty Budget: sigma_total = sqrt(sigma_sar^2 + sigma_ais^2 + sigma_motion^2), z = dist_m / sigma_total, score = exp(-0.5 * z^2)"]
+
+    UncertaintyBudget --> DecisionBoundary{"Decision Boundary Evaluation: dist_m <= hard_gate AND z <= 2.5?"}
+    DecisionBoundary -- High Confidence Match --> MatchedStatus([Tag: AIS-MATCHED / Verified Commercial Vessel])
+    DecisionBoundary -- Soft Edge --> ReviewStatus([Tag: DETECTION-REVIEW-REQUIRED / Ambiguous Soft Edge])
+    DecisionBoundary -- Exceeded Gates --> RejectedCandidate["Candidate Exceeded Gates, Try Next Candidate"]
+    RejectedCandidate --> SectorCoverage

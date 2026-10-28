@@ -1,0 +1,15 @@
+flowchart TD
+    PixelIn([Parent Scene Pixel Coordinate: X, Y]) --> LoadGCP[Load Geolocation Grid Points Grid: GCP line, pixel, lon, lat]
+    LoadGCP --> LineBracket["Bisection Search: Find Enclosing GCP Lines [L0, L1] where L0 <= Y <= L1"]
+    LineBracket --> PixelBracket["Bisection Search: Find Enclosing GCP Pixels [P0, P1] on Lines L0 and L1"]
+    PixelBracket --> BilinearWeights["Compute Normalized Interpolation Weights: u = (X - P0)/(P1 - P0), v = (Y - L0)/(L1 - L0)"]
+
+    BilinearWeights --> BilinearFormula["Bilinear Geodesic Surface Interpolation: Coord = (1-u)(1-v)G00 + u(1-v)G10 + uv G11 + (1-u)v G01"]
+    BilinearFormula --> RawGeo["Calculated Raw Coordinate: Latitude, Longitude"]
+
+    RawGeo --> InvariantCheck{"Validate Geometric Invariants: -90 <= Lat <= 90 and Finite Real?"}
+    InvariantCheck -- Invalid --> RaiseError([Raise CoordinateValidationError])
+    InvariantCheck -- Valid --> AntimeridianNorm["Antimeridian Normalization: Lon = (Lon + 180) % 360 - 180"]
+
+    AntimeridianNorm --> FormatRepresentations["Format Standard Output Projections: Leaflet [lat, lon], GeoJSON/PostGIS [lon, lat], EWKT POINT"]
+    FormatRepresentations --> ValidGeoPoint([Validated GeoPoint EPSG:4326])

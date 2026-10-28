@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 460" width="940" height="460">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="470.0" y="30" class="title">Fig 3.2: Sentinel-1 and AIS Dark-Vessel Analysis End-to-End Data Flow</text>
+  
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <!-- Lifelines -->
+  <line x1="80" y1="80" x2="80" y2="420" class="edge-dash" />
+  <line x1="220" y1="80" x2="220" y2="420" class="edge-dash" />
+  <line x1="380" y1="80" x2="380" y2="420" class="edge-dash" />
+  <line x1="540" y1="80" x2="540" y2="420" class="edge-dash" />
+  <line x1="700" y1="80" x2="700" y2="420" class="edge-dash" />
+  <line x1="840" y1="80" x2="840" y2="420" class="edge-dash" />
+
+  <!-- Headers -->
+  <rect x="20" y="50" width="120" height="30" fill="#e0f2fe" stroke="#0284c7" rx="4" />
+  <text x="80" y="70" class="box-title">Watch Officer</text>
+  <rect x="160" y="50" width="120" height="30" fill="#f1f5f9" stroke="#475569" rx="4" />
+  <text x="220" y="70" class="box-title">React Frontend</text>
+  <rect x="320" y="50" width="120" height="30" fill="#f8fafc" stroke="#2563eb" rx="4" />
+  <text x="380" y="70" class="box-title">FastAPI Backend</text>
+  <rect x="480" y="50" width="120" height="30" fill="#eff6ff" stroke="#1d4ed8" rx="4" />
+  <text x="540" y="70" class="box-title">Copernicus CDSE</text>
+  <rect x="640" y="50" width="120" height="30" fill="#fef2f2" stroke="#dc2626" rx="4" />
+  <text x="700" y="70" class="box-title">YOLO Detector</text>
+  <rect x="780" y="50" width="120" height="30" fill="#f0fdf4" stroke="#16a34a" rx="4" />
+  <text x="840" y="70" class="box-title">PostGIS &amp; AIS</text>
+
+  <!-- Messages -->
+  <line x1="80" y1="110" x2="220" y2="110" class="edge-line" marker-end="url(#arr2)" />
+  <text x="150" y="105" class="box-text">1. Select BBox &amp; Dates</text>
+
+  <line x1="220" y1="140" x2="380" y2="140" class="edge-line" marker-end="url(#arr2)" />
+  <text x="300" y="135" class="box-text">2. POST /api/v1/sar/search</text>
+
+  <line x1="380" y1="170" x2="540" y2="170" class="edge-line" marker-end="url(#arr2)" />
+  <text x="460" y="165" class="box-text">3. STAC Scene Query</text>
+
+  <line x1="540" y1="200" x2="220" y2="200" class="edge-line" stroke-dasharray="4" marker-end="url(#arr2)" />
+  <text x="380" y="195" class="box-text">4. Scene Footprints to UI</text>
+
+  <line x1="80" y1="230" x2="220" y2="230" class="edge-line" marker-end="url(#arr2)" />
+  <text x="150" y="225" class="box-text">5. Click 'Analyze Scene'</text>
+
+  <line x1="220" y1="260" x2="380" y2="260" class="edge-line" marker-end="url(#arr2)" />
+  <text x="300" y="255" class="box-text">6. POST /api/v1/sar/jobs (202 Accepted)</text>
+
+  <line x1="380" y1="290" x2="540" y2="290" class="edge-line" marker-end="url(#arr2)" />
+  <text x="460" y="285" class="box-text">7. Download GeoTIFF Bands</text>
+
+  <line x1="380" y1="320" x2="700" y2="320" class="edge-line" marker-end="url(#arr2)" />
+  <text x="540" y="315" class="box-text">8. Tiled Inference (640x640)</text>
+
+  <line x1="700" y1="350" x2="380" y2="350" class="edge-line" marker-end="url(#arr2)" />
+  <text x="540" y="345" class="box-text">9. Detections &amp; GCP Georeference</text>
+
+  <line x1="380" y1="380" x2="840" y2="380" class="edge-line" marker-end="url(#arr2)" />
+  <text x="610" y="375" class="box-text">10. Spatiotemporal AIS Match (+-15m, 3km)</text>
+
+  <line x1="380" y1="410" x2="220" y2="410" class="edge-line" stroke-dasharray="4" marker-end="url(#arr2)" />
+  <text x="300" y="405" class="box-text">11. Render Dark-Vessel Overlays</text>
+
+</svg>

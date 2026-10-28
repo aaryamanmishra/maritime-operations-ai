@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    actor Operator as Maritime Watch Officer
+    participant UI as Tactical React Frontend
+    participant API as FastAPI Backend Engine
+    participant CDSE as Copernicus CDSE (ESA)
+    participant ML as YOLO SAR Detector
+    participant Geo as Georeferencing Engine
+    participant DB as PostGIS Geospatial DB
+    participant AIS as AISStream Live Worker
+
+    Note over AIS,DB: Continuous AIS Background Ingestion
+    AIS->>DB: Ingest vessel positions, MMSI, SOG, COG (PostGIS EPSG:4326)
+
+    Operator->>UI: Select Area of Interest (BBox) and Time Window
+    UI->>API: POST /api/v1/sar/search (BBox, Dates, Modality=GRD)
+    API->>CDSE: STAC Catalog Query (Sentinel-1 GRD IW)
+    CDSE-->>API: Return Scene Summaries (Orbit, Pass, Footprint)
+    API-->>UI: Display Available Satellite Passes on Map
+
+    Operator->>UI: Click 'Analyze Scene for Dark Vessels'
+    UI->>API: POST /api/v1/sar/jobs (scene_id, modality)
+    API-->>UI: 202 Accepted (job_id, status=PENDING)
+
+    Note over API,CDSE: Asynchronous Background Processing
+    API->>CDSE: Download VV/VH Polarized GeoTIFF Measurements
+    API->>API: Percentile Clip Normalization and 640x640 Native Tiling
+    API->>ML: Run Batched Inference (Ultralytics YOLO)
+    ML-->>API: Raw Detections (bbox_x, bbox_y, confidence)
+    API->>Geo: Interpolate GCP Grid to WGS84 (Lon, Lat)
+    API->>API: Cross-Tile Deduplication and Boundary NMS
+
+    API->>DB: Spatiotemporal Query AIS within +-15m and 3.0km
+    DB-->>API: Candidate AIS Tracks (SOG, COG, Timestamp)
+    API->>API: Compute Kinematic Uncertainty Budget and Likelihood
+    API->>DB: Persist SARDetection and AISSARCorrelation Records
+
+    UI->>API: GET /api/v1/sar/jobs/{job_id} (Poll Status)
+    API-->>UI: 200 OK (status=COMPLETED, detections summary)
+    UI->>DB: Fetch Rendered GeoJSON Layers
+    UI-->>Operator: Render High-Contrast SAR Overlay, Matched Vessels and Dark Candidates

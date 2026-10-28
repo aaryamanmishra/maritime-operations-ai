@@ -43,13 +43,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-maritime_user}:${POSTGRES_PASSWORD:-maritime_secure_dev_password}@postgres:5432/${POSTGRES_DB:-maritime_ops}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: '["http://localhost:5173", "http://localhost:3000", "http://localhost:80", "http://localhost"]'
-      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
       AIS_BBOX_MIN_LAT: ${AIS_BBOX_MIN_LAT:-49.5}
       AIS_BBOX_MIN_LON: ${AIS_BBOX_MIN_LON:--2.0}
       AIS_BBOX_MAX_LAT: ${AIS_BBOX_MAX_LAT:-51.5}
       AIS_BBOX_MAX_LON: ${AIS_BBOX_MAX_LON:-2.5}
       CDSE_USERNAME: ${CDSE_USERNAME:-}
       CDSE_PASSWORD: ${CDSE_PASSWORD:-}
+      CDSE_CLIENT_ID: ${CDSE_CLIENT_ID:-}
+      CDSE_CLIENT_SECRET: ${CDSE_CLIENT_SECRET:-}
     volumes:
       - ./backend:/app
     ports:
@@ -84,8 +85,6 @@ services:
       AIS_BBOX_MIN_LON: ${AIS_BBOX_MIN_LON:--2.0}
       AIS_BBOX_MAX_LAT: ${AIS_BBOX_MAX_LAT:-51.5}
       AIS_BBOX_MAX_LON: ${AIS_BBOX_MAX_LON:-2.5}
-      CDSE_USERNAME: ${CDSE_USERNAME:-}
-      CDSE_PASSWORD: ${CDSE_PASSWORD:-}
     depends_on:
       backend:
         condition: service_healthy

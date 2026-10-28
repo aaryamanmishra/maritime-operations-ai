@@ -1,0 +1,74 @@
+erDiagram
+    SAR_SCENE ||--o{ SAR_DETECTION : contains
+    SAR_DETECTION ||--o| AIS_SAR_CORRELATION : evaluates
+    VESSEL_IDENTITY ||--o| CURRENT_VESSEL_STATE : tracks
+    VESSEL_IDENTITY ||--o{ VESSEL_POSITION_HISTORY : records
+    AIS_SAR_CORRELATION }o--o| VESSEL_IDENTITY : identifies
+
+    SAR_SCENE {
+        string scene_id PK "Unique CDSE Scene ID"
+        timestamptz acquisition_time "Satellite pass timestamp"
+        string platform "Sentinel-1A / Sentinel-1C"
+        string orbit_pass "ASCENDING / DESCENDING"
+        geometry footprint "POLYGON EPSG:4326"
+        string processing_level "LEVEL1_GRD / LEVEL1_SLC"
+        string polarization "VV+VH"
+        jsonb scene_metadata "CDSE technical attributes"
+    }
+
+    SAR_DETECTION {
+        bigint id PK "Auto-increment surrogate key"
+        string detection_id UK "UUID string identifier"
+        string scene_id FK "Parent scene foreign key"
+        geometry geom "POINT EPSG:4326 GIST index"
+        numeric latitude "WGS84 decimal degrees"
+        numeric longitude "WGS84 decimal degrees"
+        jsonb pixel_bbox "BBox in scene coordinates"
+        numeric confidence "Model detection confidence"
+        string model_version "Model version identifier"
+        numeric length_m "Estimated vessel length"
+        numeric heading_deg "Estimated target heading"
+    }
+
+    AIS_SAR_CORRELATION {
+        bigint id PK "Auto-increment surrogate key"
+        bigint sar_detection_id FK "Detection reference (Unique)"
+        bigint candidate_mmsi FK "Correlated MMSI identifier"
+        numeric time_difference_seconds "Delta t between SAR and AIS"
+        numeric distance_km "Projected geodesic separation"
+        string match_status "AIS-MATCHED / AIS-UNMATCHED / REVIEW"
+        string matching_method "Kinematic uncertainty geodesic"
+        jsonb provenance "Uncertainty budget and gate metrics"
+    }
+
+    VESSEL_IDENTITY {
+        bigint mmsi PK "Maritime Mobile Service Identity"
+        integer imo "International Maritime Organization ID"
+        string name "Vessel commercial name"
+        string callsign "Radio callsign"
+        integer ship_type "Vessel type code"
+        numeric length "Vessel overall length"
+        numeric beam "Vessel breadth"
+    }
+
+    CURRENT_VESSEL_STATE {
+        bigint mmsi PK, FK "Reference to vessel_identity"
+        timestamptz timestamp "Latest position timestamp"
+        geometry geom "POINT EPSG:4326 GIST index"
+        numeric latitude "WGS84 decimal degrees"
+        numeric longitude "WGS84 decimal degrees"
+        numeric sog "Speed Over Ground (knots)"
+        numeric cog "Course Over Ground (degrees)"
+        numeric heading "Vessel compass heading"
+    }
+
+    VESSEL_POSITION_HISTORY {
+        bigint id PK "Auto-increment surrogate key"
+        bigint mmsi FK "Reference to vessel_identity"
+        timestamptz timestamp "AIS message broadcast timestamp"
+        geometry geom "POINT EPSG:4326 GIST index"
+        numeric latitude "WGS84 decimal degrees"
+        numeric longitude "WGS84 decimal degrees"
+        numeric sog "Speed Over Ground (knots)"
+        numeric cog "Course Over Ground (degrees)"
+    }

@@ -100,6 +100,27 @@ def test_aisstream_adapter_position_report():
     assert event.nav_status == 0
 
 
+def test_aisstream_adapter_sog_and_cog_unavailable_normalization():
+    raw = {
+        "MessageType": "PositionReport",
+        "MetaData": {"MMSI": 123456789, "latitude": 50.0, "longitude": 1.0},
+        "Message": {
+            "PositionReport": {
+                "Sog": 102.3,  # 102.3 means speed unavailable (> 102.2 knots)
+                "Cog": 360.0,  # 360.0 means course unavailable
+                "TrueHeading": 511,
+                "Latitude": 50.0,
+                "Longitude": 1.0
+            }
+        }
+    }
+    event = AISStreamAdapter.normalize_message(raw)
+    assert event is not None
+    assert event.sog is None  # Normalized to None
+    assert event.cog is None  # Normalized to None
+    assert event.heading is None
+
+
 def test_aisstream_adapter_heading_511_normalization():
     raw = {
         "MessageType": "PositionReport",

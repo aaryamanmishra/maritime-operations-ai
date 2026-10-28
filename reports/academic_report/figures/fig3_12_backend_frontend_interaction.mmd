@@ -1,0 +1,37 @@
+sequenceDiagram
+    autonumber
+    participant UI as React Map Component (MaritimeMap.tsx)
+    participant State as Application State (App.tsx)
+    participant DarkPanel as DarkVesselControlPanel.tsx
+    participant SAR_API as SAR Client Service (sarApi.ts)
+    participant Backend as FastAPI Application (/api/v1)
+    participant DB as PostgreSQL / PostGIS Engine
+
+    UI->>State: User clicks Area of Interest on Leaflet Map
+    State->>DarkPanel: Update Bounding Box Coordinates (minLat, maxLat, minLon, maxLon)
+    DarkPanel->>SAR_API: searchSARScenes(bbox, dates, modality)
+    SAR_API->>Backend: POST /api/v1/sar/search
+    Backend-->>SAR_API: 200 OK (List of SARSceneSummary)
+    SAR_API-->>DarkPanel: Display Available Scenes in Table
+
+    DarkPanel->>State: User Selects Scene S1C_IW_GRDH_...
+    State->>UI: Draw Footprint Polygon on Map
+
+    DarkPanel->>SAR_API: startSARJob(scene_id, modality)
+    SAR_API->>Backend: POST /api/v1/sar/jobs
+    Backend-->>SAR_API: 202 Accepted (job_id, status=PENDING)
+
+    loop Polling every 2.5s until COMPLETED
+        DarkPanel->>SAR_API: fetchSARJobStatus(job_id)
+        SAR_API->>Backend: GET /api/v1/sar/jobs/{job_id}
+        Backend-->>SAR_API: Job Status (PROGRESS / COMPLETED)
+    end
+
+    DarkPanel->>SAR_API: fetchSceneDetections(scene_id)
+    SAR_API->>Backend: GET /api/v1/sar/scenes/{scene_id}/detections
+    Backend->>DB: Query SARDetection with AISSARCorrelation join
+    DB-->>Backend: Detections Records with Provenance JSON
+    Backend-->>SAR_API: 200 OK (List of SARDetectionItem)
+    SAR_API-->>DarkPanel: Load Detections into List
+    DarkPanel->>State: setSARDetections(detections)
+    State->>UI: Render High-Contrast Overlays (Red=Dark, Green=Matched, Amber=Review)

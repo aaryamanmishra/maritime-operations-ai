@@ -1,0 +1,34 @@
+flowchart LR
+    subgraph INGESTION_SOURCE["External Broadcast Source"]
+        AIS_HUB["AISStream.io Secure WebSocket"]
+    end
+
+    subgraph WORKER_SERVICE["AIS Ingestion Worker"]
+        direction TB
+        WS_CLIENT["AsyncIO WebSocket Client"]
+        DECODER["AIVDM/AIVDO JSON Message Parser"]
+        FILTER["Geographic Bounding Box Filter: (49.5°N - 51.5°N, 2.0°W - 2.5°E)"]
+        VALIDATOR["Kinematic Sanity Filter: (0 <= SOG <= 70 kn, 0 <= COG < 360°)"]
+        BUFFER["Batch Buffer (100 msgs or 5.0 seconds)"]
+    end
+
+    subgraph CACHE_LAYER["Redis 7 Ephemeral Storage"]
+        direction TB
+        GEO_CACHE["GEOADD Live Vessel Coordinates"]
+        EXPIRY["Vessel Expiry TTL = 3600 seconds"]
+        PUBSUB["Pub/Sub Channel: live_vessel_traffic"]
+    end
+
+    subgraph RELATIONAL_DB["PostgreSQL 16 + PostGIS Spatial DB"]
+        direction TB
+        IDENTITY_TBL[("vessel_identity: MMSI, IMO, Name, Type, Dimensions")]
+        STATE_TBL[("current_vessel_state: MMSI (PK), Timestamp, SOG, COG, Geom (Point)")]
+        HIST_TBL[("vessel_position_history: ID (PK), MMSI, Timestamp, SOG, COG, Geom (Point)")]
+    end
+
+    AIS_HUB -->|Encrypted TLS Stream| WS_CLIENT
+    WS_CLIENT --> DECODER --> FILTER --> VALIDATOR --> BUFFER
+    BUFFER -->|Pipelined Write| GEO_CACHE & PUBSUB
+    GEO_CACHE --> EXPIRY
+    BUFFER -->|Async Batch Upsert| IDENTITY_TBL & STATE_TBL
+    BUFFER -->|Async Append| HIST_TBL

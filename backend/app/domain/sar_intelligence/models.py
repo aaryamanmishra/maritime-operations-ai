@@ -7,8 +7,12 @@ from pydantic import BaseModel, Field, field_validator
 
 class MatchStatus(str, Enum):
     MATCHED = "AIS-MATCHED"
+    DARK_VESSEL_CANDIDATE = "DARK-VESSEL-CANDIDATE"
+    UNMATCHED_INSUFFICIENT_COVERAGE = "AIS-UNMATCHED-INSUFFICIENT-COVERAGE"
+    COMPARISON_UNAVAILABLE = "AIS-COMPARISON-UNAVAILABLE"
+    DETECTION_REVIEW_REQUIRED = "DETECTION-REVIEW-REQUIRED"
+    # Backward compatibility aliases
     UNMATCHED = "AIS-UNMATCHED"
-    COMPARISON_UNAVAILABLE = "AIS COMPARISON UNAVAILABLE"
 
 
 class GeographicContextStatus(str, Enum):
@@ -116,6 +120,8 @@ class SARJobResponse(BaseModel):
     detections_count: int = 0
     matched_count: int = 0
     unmatched_count: int = 0
+    dark_vessel_count: int = 0
+    review_required_count: int = 0
     coverage_unavailable_count: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None

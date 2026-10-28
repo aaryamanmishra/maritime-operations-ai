@@ -140,22 +140,26 @@ class AISPipelineWorker:
                             logger.info("AISStream subscription confirmed by server.")
                             continue
 
-                        # Normalize
-                        event = AISStreamAdapter.normalize_message(data)
-                        if not event:
+                        # Normalize and publish with per-message fault tolerance
+                        try:
+                            event = AISStreamAdapter.normalize_message(data)
+                            if not event:
+                                continue
+
+                            self._normalized_count += 1
+
+                            # Append to Redis Stream (stream:ais:raw)
+                            payload = {"data": event.model_dump_json()}
+                            await redis.xadd(
+                                name=settings.AIS_STREAM_KEY,
+                                fields=payload,
+                                maxlen=50000,
+                                approximate=True,
+                            )
+                            self._stream_writes += 1
+                        except Exception as msg_err:
+                            logger.warning("Failed processing single AIS message: %s", msg_err)
                             continue
-
-                        self._normalized_count += 1
-
-                        # Append to Redis Stream (stream:ais:raw)
-                        payload = {"data": event.model_dump_json()}
-                        await redis.xadd(
-                            name=settings.AIS_STREAM_KEY,
-                            fields=payload,
-                            maxlen=50000,
-                            approximate=True,
-                        )
-                        self._stream_writes += 1
 
             except ConnectionClosed as exc:
                 self._connection_state = "reconnecting"

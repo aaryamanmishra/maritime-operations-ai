@@ -437,6 +437,12 @@ export const MaritimeMap: React.FC<MaritimeMapProps> = ({
             'case',
             ['==', ['get', 'match_status'], 'AIS-MATCHED'],
             '#10b981',
+            ['==', ['get', 'match_status'], 'DARK-VESSEL-CANDIDATE'],
+            '#f43f5e',
+            ['==', ['get', 'match_status'], 'DETECTION-REVIEW-REQUIRED'],
+            '#06b6d4',
+            ['==', ['get', 'match_status'], 'AIS-UNMATCHED-INSUFFICIENT-COVERAGE'],
+            '#d97706',
             ['==', ['get', 'match_status'], 'AIS-UNMATCHED'],
             '#f59e0b',
             '#64748b'

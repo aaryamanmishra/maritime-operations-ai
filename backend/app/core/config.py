@@ -28,6 +28,20 @@ class Settings(BaseSettings):
             return v
         return v
 
+    @field_validator(
+        "CDSE_USERNAME",
+        "CDSE_PASSWORD",
+        "CDSE_CLIENT_ID",
+        "CDSE_CLIENT_SECRET",
+        "AISSTREAM_API_KEY",
+        mode="before",
+    )
+    @classmethod
+    def clean_credential_strings(cls, v: str | None) -> str:
+        if isinstance(v, str):
+            return v.strip().strip("'").strip('"')
+        return "" if v is None else str(v)
+
     # Database (PostgreSQL + PostGIS)
     DATABASE_URL: str = "postgresql+asyncpg://maritime_user:maritime_secure_dev_password@postgres:5432/maritime_ops"
 
@@ -74,7 +88,7 @@ class Settings(BaseSettings):
     SAR_CORRELATION_DISTANCE_KM: float = 3.0
 
     model_config = SettingsConfigDict(
-        env_file=(".env", "backend/.env"),
+        env_file=(".env", "backend/.env", "../.env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",

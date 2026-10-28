@@ -15,6 +15,7 @@ from app.domain.sar_intelligence.correlation import AISSARCorrelationEngine
 from app.domain.sar_intelligence.geographic_context import GeographicContextValidator
 from app.domain.sar_intelligence.inference import YOLO26sVesselDetector
 from app.domain.sar_intelligence.models import (
+    GeographicContextStatus,
     MatchStatus,
     SARDetectionItem,
     SARJobResponse,
@@ -268,6 +269,11 @@ class SARAnalysisService:
                 r_path = grd_data.get("raster_path")
                 if r_path and os.path.exists(r_path) and os.path.getsize(r_path) > 0:
                     raster_path = r_path
+                grd_meta = grd_data.get("metadata", {})
+                if grd_meta:
+                    effective_metadata.update(grd_meta)
+                    if scene_summary:
+                        scene_summary.scene_metadata.update(grd_meta)
 
             # Strictly separate fallback sample images by modality (offline demo fallback only)
             is_real_scene = bool(scene_id and scene_id.startswith("S1") and "DEMO" not in scene_id.upper())
@@ -305,13 +311,42 @@ class SARAnalysisService:
                 arr = np.random.normal(loc=40.0, scale=15.0, size=(640, 640, 3)).clip(0, 255).astype(np.uint8)
                 Image.fromarray(arr).save(raster_path)
 
-            scene_img = np.array(Image.open(raster_path).convert("RGB"))
-            h, w = scene_img.shape[:2]
-
-            # Use dedicated preprocessor for modality - never mix GRD and SLC
+            # Use dedicated preprocessor and resolution path for modality
             if mod_upper == "SLC":
+                scene_img = np.array(Image.open(raster_path).convert("RGB"))
+                h, w = scene_img.shape[:2]
                 tiles = self.slc_preprocessor.generate_tiles(scene_img, modality="SLC")
+            elif is_real_scene:
+                # Sentinel-1 GRD native-resolution inference: extract native 10m/pixel chips
+                # from CDSE COG over authenticated S3 range requests to prevent vessel obliteration
+                orig_w = int(effective_metadata.get("original_width") or 26676)
+                orig_h = int(effective_metadata.get("original_height") or 16681)
+                native_chips = await self.acquisition_client.acquire_grd_native_chips(
+                    scene_id=scene_id,
+                    scene_metadata=effective_metadata,
+                    chip_size=640,
+                    stride=576,
+                    target_dir=f"data/sar_cache/{mod_upper.lower()}",
+                )
+                if native_chips:
+                    tiles = native_chips
+                    w = orig_w
+                    h = orig_h
+                    logger.info(
+                        "Extracted %d native-resolution GRD chips (%dx%d, stride 576) from %s",
+                        len(tiles),
+                        640,
+                        640,
+                        scene_id,
+                    )
+                else:
+                    logger.warning("Native chip extraction returned no chips; falling back to preview tiling")
+                    scene_img = np.array(Image.open(raster_path).convert("RGB"))
+                    h, w = scene_img.shape[:2]
+                    tiles = self.preprocessor.generate_tiles(scene_img, modality="GRD")
             else:
+                scene_img = np.array(Image.open(raster_path).convert("RGB"))
+                h, w = scene_img.shape[:2]
                 tiles = self.preprocessor.generate_tiles(scene_img, modality="GRD")
 
             # 3. INFERENCE PHASE
@@ -346,25 +381,43 @@ class SARAnalysisService:
             detection_items: list[SARDetectionItem] = []
             matched_count = 0
             unmatched_count = 0
+            dark_vessel_count = 0
+            review_required_count = 0
             coverage_unavailable_count = 0
 
+            matched_mmsis: set[int] = set()
+
             async with session_factory() as session:
+                # Enforce idempotency: atomically clear previous detections for this scene
+                # ais_sar_correlation rows cascade-delete automatically via foreign key
+                await session.execute(
+                    text("DELETE FROM sar_detection WHERE scene_id = :scene_id").bindparams(scene_id=scene_id)
+                )
+
                 for det in detections:
                     lat = det["latitude"]
                     lon = det["longitude"]
 
-                    # Run spatiotemporal correlation
+                    # Run spatiotemporal correlation with 1-to-1 MMSI exclusion
                     corr_result = await self.correlation_engine.correlate_detection(
                         session=session,
                         lat=lat,
                         lon=lon,
                         acquisition_time=acq_time,
+                        exclude_mmsis=matched_mmsis,
                     )
 
                     match_status = corr_result["match_status"]
                     if match_status == MatchStatus.MATCHED:
                         matched_count += 1
-                    elif match_status == MatchStatus.UNMATCHED:
+                        if corr_result.get("candidate_mmsi"):
+                            matched_mmsis.add(corr_result["candidate_mmsi"])
+                    elif match_status == MatchStatus.DARK_VESSEL_CANDIDATE:
+                        dark_vessel_count += 1
+                        unmatched_count += 1
+                    elif match_status == MatchStatus.DETECTION_REVIEW_REQUIRED:
+                        review_required_count += 1
+                    elif match_status in (MatchStatus.UNMATCHED, MatchStatus.UNMATCHED_INSUFFICIENT_COVERAGE):
                         unmatched_count += 1
                     else:
                         coverage_unavailable_count += 1
@@ -399,7 +452,11 @@ class SARAnalysisService:
 
                     det_provenance = {
                         **(corr_result.get("provenance") or {}),
-                        "geolocation_method": "piecewise_gcp_grid" if ("geolocation_grid_points" in effective_metadata and effective_metadata["geolocation_grid_points"]) else "bilinear_footprint",
+                        "geolocation_method": (
+                            "piecewise_gcp_grid" if ("geolocation_grid_points" in effective_metadata and effective_metadata["geolocation_grid_points"])
+                            else "geotransform_affine" if effective_metadata.get("geotransform")
+                            else "bilinear_footprint"
+                        ),
                         "modality": mod_upper,
                     }
                     if "source_tile" in det:
@@ -447,8 +504,13 @@ class SARAnalysisService:
 
             summary_parts = [
                 f"{matched_count} AIS-MATCHED",
-                f"{unmatched_count} AIS-UNMATCHED",
             ]
+            if dark_vessel_count > 0:
+                summary_parts.append(f"{dark_vessel_count} DARK-VESSEL-CANDIDATES")
+            if review_required_count > 0:
+                summary_parts.append(f"{review_required_count} REVIEW-REQUIRED")
+            if unmatched_count > 0 and dark_vessel_count == 0:
+                summary_parts.append(f"{unmatched_count} AIS-UNMATCHED")
             if coverage_unavailable_count > 0:
                 summary_parts.append(f"{coverage_unavailable_count} AIS COVERAGE UNAVAILABLE")
             summary_str = ", ".join(summary_parts)
@@ -466,6 +528,8 @@ class SARAnalysisService:
             job.detections_count = len(operational_vessels) if mod_upper == "SLC" else len(detection_items)
             job.matched_count = matched_count
             job.unmatched_count = unmatched_count
+            job.dark_vessel_count = dark_vessel_count
+            job.review_required_count = review_required_count
             job.coverage_unavailable_count = coverage_unavailable_count
             job.completed_at = datetime.now(UTC)
             job.detections = detection_items
@@ -531,7 +595,23 @@ class SARAnalysisService:
                 prov,
             ) = row
 
-            status_enum = MatchStatus.MATCHED if m_status == "AIS-MATCHED" else MatchStatus.UNMATCHED
+            if m_status == MatchStatus.MATCHED.value:
+                status_enum = MatchStatus.MATCHED
+            elif m_status == MatchStatus.COMPARISON_UNAVAILABLE.value:
+                status_enum = MatchStatus.COMPARISON_UNAVAILABLE
+            elif m_status == MatchStatus.UNMATCHED.value:
+                status_enum = MatchStatus.UNMATCHED
+            else:
+                status_enum = MatchStatus.COMPARISON_UNAVAILABLE
+
+            geo_ctx = (prov or {}).get("geographic_context")
+            if geo_ctx and isinstance(geo_ctx, dict):
+                surface_ctx = GeographicContextStatus(geo_ctx.get("status", GeographicContextStatus.PLAUSIBLE_WATER.value))
+                is_operational = bool(geo_ctx.get("is_operational_vessel", True))
+            else:
+                validated_ctx = self.geographic_validator.validate_candidate(lat=float(lat), lon=float(lon))
+                surface_ctx = validated_ctx.status
+                is_operational = validated_ctx.is_operational_vessel
 
             items.append(
                 SARDetectionItem(
@@ -546,6 +626,8 @@ class SARAnalysisService:
                     length_m=float(len_m) if len_m is not None else None,
                     heading_deg=float(hdg_deg) if hdg_deg is not None else None,
                     match_status=status_enum,
+                    surface_context=surface_ctx,
+                    is_operational_vessel=is_operational,
                     candidate_mmsi=int(c_mmsi) if c_mmsi is not None else None,
                     time_difference_seconds=float(t_diff) if t_diff is not None else None,
                     distance_km=float(dist_km) if dist_km is not None else None,

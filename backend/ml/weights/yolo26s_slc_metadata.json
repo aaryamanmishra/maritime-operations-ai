@@ -1,6 +1,6 @@
 {
-  "model_name": "YOLO26s-SAR-Vessel",
-  "model_architecture": "yolo26s",
+  "model_name": "YOLO11s-SAR-Vessel-SLC",
+  "model_architecture": "YOLO11s-DetectionModel",
   "task": "detect",
   "dataset_name": "OpenSAR Insight Sentinel-1 SLC",
   "dataset_splits": {
@@ -12,17 +12,17 @@
     "0": "vessel"
   },
   "image_size": 640,
-  "epochs_completed": 37,
+  "epochs_completed": 45,
   "best_epoch": null,
   "batch_size": 16,
-  "optimizer": "auto",
-  "learning_rate": 0.001,
+  "optimizer": "SGD",
+  "learning_rate": 0.01,
   "mixed_precision": true,
   "test_metrics": {
-    "precision": 0.5255,
-    "recall": 0.4164,
-    "map50": 0.3792,
-    "map50_95": 0.1284
+    "precision": 0.5174,
+    "recall": 0.4515,
+    "map50": 0.3941,
+    "map50_95": 0.1225
   },
   "training_date": "2026-10-19T21:45:50.639420+00:00",
   "git_commit": "maritime-operations-ai-kaggle-v1",
@@ -33,5 +33,35 @@
     "cuda_version": "12.8",
     "device_count": 2,
     "vram_total_gb": 14.56
+  },
+  "best_sha256": "e4e56ab56f1b055fa268bfd5a04a3fd1b6dc0f10f46fcc0841cd169b63d60a4b",
+  "updated_from": "all_runs_and_artifacts/yolo11s_opensar_export/best.pt",
+  "provenance": "OpenSAR Insight Sentinel-1 SLC (640x640, SGD, 45 Epochs)",
+  "evaluation_held_out_test": {
+    "precision": 0.5255,
+    "recall": 0.4164,
+    "mAP50": 0.3792,
+    "mAP50_95": 0.1284,
+    "notes": "Baseline SLC test contract."
+  },
+  "latest_colab_baseline_benchmark": {
+    "precision": 0.5174,
+    "recall": 0.4515,
+    "mAP50": 0.3941,
+    "mAP50_95": 0.1225,
+    "epochs": 45,
+    "imgsz": 640,
+    "sha256": "e4e56ab56f1b055fa268bfd5a04a3fd1b6dc0f10f46fcc0841cd169b63d60a4b",
+    "source": "all_runs_and_artifacts/yolo11s_opensar_export/best.pt"
+  },
+  "latest_colab_paper_benchmark": {
+    "precision": 0.4157,
+    "recall": 0.3914,
+    "mAP50": 0.334,
+    "mAP50_95": 0.1016,
+    "epochs": 37,
+    "imgsz": 512,
+    "sha256": "fb4a844e38cda15f91fdf47a2c87b51bf7800ace8e4fcad1c0c8d1649f37a93d",
+    "source": "all_runs_and_artifacts/yolo11s_opensar_paper_export/best.pt"
   }
 }

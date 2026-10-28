@@ -31,6 +31,7 @@ class CopernicusAcquisitionClient:
         self.token_url = self.settings.CDSE_TOKEN_URL
         self._cached_token: str | None = None
         self._token_expires_at: float = 0.0
+        self.s3_session_file: str = ".sar_s3_session.json"
 
     def is_configured(self) -> bool:
         """Check if CDSE credentials are provided in settings."""
@@ -72,9 +73,14 @@ class CopernicusAcquisitionClient:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 res = await client.post(self.token_url, data=data)
                 if res.status_code != 200:
-                    logger.error("CDSE Auth failed (%d): %s", res.status_code, res.text[:200])
+                    try:
+                        err_json = res.json()
+                        err_msg = err_json.get("error_description") or err_json.get("error") or res.text[:200]
+                    except Exception:
+                        err_msg = res.text[:200]
+                    logger.error("CDSE Auth failed (%d): %s", res.status_code, err_msg)
                     raise CDSEAuthenticationError(
-                        f"Failed to authenticate with CDSE Keycloak: HTTP {res.status_code}"
+                        f"Failed to authenticate with CDSE Keycloak (HTTP {res.status_code}): {err_msg}"
                     )
                 
                 token_data = res.json()
@@ -178,7 +184,7 @@ class CopernicusAcquisitionClient:
         if getattr(self, "_cached_s3_creds", None):
             return self._cached_s3_creds
 
-        cache_file = Path(".sar_s3_session.json")
+        cache_file = Path(getattr(self, "s3_session_file", ".sar_s3_session.json"))
         if cache_file.exists():
             try:
                 with open(cache_file) as f:
@@ -195,12 +201,40 @@ class CopernicusAcquisitionClient:
                 "https://s3-keys-manager.cloudferro.com/api/user/credentials",
                 headers={"Authorization": f"Bearer {token}"},
             )
+            # Self-healing: if CloudFerro 10-credential limit is reached, prune the oldest credential and retry
+            if res.status_code == 403 and "Max number of credentials reached" in res.text:
+                try:
+                    list_res = await client.get(
+                        "https://s3-keys-manager.cloudferro.com/api/user/credentials",
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    if list_res.status_code == 200:
+                        existing = list_res.json().get("credentials", [])
+                        if existing:
+                            oldest_id = existing[0].get("access_id")
+                            if oldest_id:
+                                logger.info("Rotating oldest CloudFerro S3 credential (%s...)", str(oldest_id)[:6])
+                                await client.delete(
+                                    f"https://s3-keys-manager.cloudferro.com/api/user/credentials/access_id/{oldest_id}",
+                                    headers={"Authorization": f"Bearer {token}"},
+                                )
+                                res = await client.post(
+                                    "https://s3-keys-manager.cloudferro.com/api/user/credentials",
+                                    headers={"Authorization": f"Bearer {token}"},
+                                )
+                except Exception as prune_err:
+                    logger.warning("Failed pruning stale S3 credentials: %s", prune_err)
+
             if res.status_code != 200:
                 raise RuntimeError(f"Failed to acquire CDSE S3 credentials: HTTP {res.status_code}")
             creds = res.json()
+            access_id = creds.get("access_id") or creds.get("access_key") or creds.get("accessKeyId")
+            secret = creds.get("secret") or creds.get("secret_key") or creds.get("secretAccessKey")
+            if not access_id or not secret:
+                raise RuntimeError("CloudFerro S3 response missing access_id or secret keys")
             self._cached_s3_creds = {
-                "access_id": creds["access_id"],
-                "secret": creds["secret"],
+                "access_id": access_id,
+                "secret": secret,
             }
             try:
                 with open(cache_file, "w") as f:
@@ -557,9 +591,15 @@ out_ds = None
         target_path = Path(target_dir) / clean_id
         target_path.mkdir(parents=True, exist_ok=True)
         fused_raster = target_path / "scene_fused.png"
+        meta_json = target_path / "grd_metadata.json"
 
-        if fused_raster.exists() and fused_raster.stat().st_size > 0:
-            return {"raster_path": str(fused_raster), "metadata": scene_metadata or {}}
+        if fused_raster.exists() and fused_raster.stat().st_size > 0 and meta_json.exists():
+            try:
+                with open(meta_json, "r", encoding="utf-8") as f:
+                    cached_meta = json.load(f)
+                    return {"raster_path": str(fused_raster), "metadata": {**(scene_metadata or {}), **cached_meta}}
+            except Exception:
+                pass
 
         if not self.is_configured():
             raise RuntimeError(
@@ -635,7 +675,252 @@ out_ds = None
         Image.fromarray(fused).save(str(fused_raster))
         logger.info("Successfully acquired genuine Sentinel-1 GRD raster to %s (%d bytes)", fused_raster, fused_raster.stat().st_size)
 
+        # Extract raster dimensions, GCP grid, and GeoTransform
+        py_system = "/usr/bin/python3" if os.path.exists("/usr/bin/python3") else sys.executable
+        meta_script = f"""
+import json
+from osgeo import gdal
+gdal.UseExceptions()
+
+gdal.SetConfigOption("AWS_ACCESS_KEY_ID", "{creds['access_id']}")
+gdal.SetConfigOption("AWS_SECRET_ACCESS_KEY", "{creds['secret']}")
+gdal.SetConfigOption("AWS_S3_ENDPOINT", "eodata.dataspace.copernicus.eu")
+gdal.SetConfigOption("AWS_HTTPS", "YES")
+gdal.SetConfigOption("AWS_VIRTUAL_HOSTING", "FALSE")
+gdal.SetConfigOption("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
+
+try:
+    ds = gdal.Open("{s3_vv}", gdal.GA_ReadOnly)
+    w = ds.RasterXSize
+    h = ds.RasterYSize
+    gt = ds.GetGeoTransform(can_return_null=True)
+    crs = ds.GetProjection()
+    gcp_crs = ds.GetGCPProjection()
+    gcps = ds.GetGCPs()
+
+    pts = []
+    if gcps:
+        for g in gcps:
+            pts.append({{
+                "line": float(g.GCPLine),
+                "pixel": float(g.GCPPixel),
+                "longitude": float(g.GCPX),
+                "latitude": float(g.GCPY),
+                "height": float(g.GCPZ),
+            }})
+
+    res = {{
+        "original_width": w,
+        "original_height": h,
+        "geotransform": list(gt) if gt else None,
+        "crs": crs or gcp_crs or "EPSG:4326",
+        "geolocation_grid_points": pts,
+        "gcp_count": len(pts),
+    }}
+    with open("{meta_json}", "w", encoding="utf-8") as f:
+        json.dump(res, f)
+except Exception as e:
+    pass
+"""
+        subprocess.run([py_system, "-c", meta_script], capture_output=True, text=True, timeout=60.0)
+
+        downsampled_h, downsampled_w = vv_arr.shape[:2]
+        extracted_meta: dict[str, Any] = {}
+        if meta_json.exists():
+            try:
+                with open(meta_json, "r", encoding="utf-8") as f:
+                    extracted_meta = json.load(f)
+            except Exception:
+                pass
+
+        orig_w = extracted_meta.get("original_width", downsampled_w)
+        orig_h = extracted_meta.get("original_height", downsampled_h)
+        scale_x = float(orig_w) / float(downsampled_w)
+        scale_y = float(orig_h) / float(downsampled_h)
+
+        extracted_meta["downsampled_width"] = downsampled_w
+        extracted_meta["downsampled_height"] = downsampled_h
+        extracted_meta["scale_x"] = scale_x
+        extracted_meta["scale_y"] = scale_y
+        extracted_meta["acquisition_method"] = "client_side_s3_gdal_live"
+        if s3_vv:
+            extracted_meta["s3_vv"] = s3_vv.replace("/vsis3/", "s3://")
+        if s3_vh:
+            extracted_meta["s3_vh"] = s3_vh.replace("/vsis3/", "s3://")
+
+        try:
+            with open(meta_json, "w", encoding="utf-8") as f:
+                json.dump(extracted_meta, f)
+        except Exception:
+            pass
+
         return {
             "raster_path": str(fused_raster),
-            "metadata": scene_metadata or {},
+            "metadata": {**(scene_metadata or {}), **extracted_meta},
         }
+
+    async def acquire_grd_native_chips(
+        self,
+        scene_id: str,
+        scene_metadata: dict[str, Any] | None = None,
+        chip_size: int = 640,
+        stride: int = 576,
+        target_dir: str = "data/sar_cache/grd",
+        window: tuple[int, int, int, int] | None = None,
+        max_chips: int | None = None,
+    ) -> list[Any]:
+        """
+        Extract bounded native-resolution Sentinel-1 GRD chips using direct authenticated S3 range reads.
+        Avoids downsampling and preserves true 10m/pixel spatial resolution for ship detection.
+
+        Args:
+            scene_id: Sentinel-1 product identifier
+            scene_metadata: Metadata containing original dimensions, GCPs, and S3 asset URIs
+            chip_size: Chip square dimension in pixels (default: 640)
+            stride: Stride between overlapping chips (default: 576, yielding 10% / 64px overlap)
+            target_dir: Target cache directory
+            window: Optional bounding box (min_x, min_y, width, height) in original raster coordinates
+            max_chips: Optional upper limit on total chips to return
+
+        Returns:
+            list[SARTile] at 1:1 native spatial resolution with tracked padding and offsets
+        """
+        import shutil
+        import subprocess
+        import numpy as np
+        from PIL import Image
+        from app.infrastructure.adapters.copernicus.preprocessing import SARTile, SARPreprocessor
+
+        clean_id = scene_id.replace(" ", "_").replace(".SAFE", "") if scene_id else "grd_default"
+        target_path = Path(target_dir) / clean_id
+        target_path.mkdir(parents=True, exist_ok=True)
+        meta_json = target_path / "grd_metadata.json"
+
+        # Load cached metadata if available
+        cached_meta: dict[str, Any] = {}
+        if meta_json.exists():
+            try:
+                with open(meta_json, "r", encoding="utf-8") as f:
+                    cached_meta = json.load(f)
+            except Exception:
+                pass
+
+        effective_meta = {**(scene_metadata or {}), **cached_meta}
+        orig_w = int(effective_meta.get("original_width") or 26676)
+        orig_h = int(effective_meta.get("original_height") or 16681)
+
+        if not self.is_configured():
+            logger.warning("CDSE credentials not configured; cannot extract native GRD chips via S3")
+            return []
+
+        gdal_bin = "/usr/bin/gdal_translate" if os.path.exists("/usr/bin/gdal_translate") else shutil.which("gdal_translate")
+        if not gdal_bin:
+            logger.warning("gdal_translate binary not available for native GRD chip extraction")
+            return []
+
+        creds = await self.get_s3_credentials()
+        child_env = {
+            **os.environ,
+            "AWS_ACCESS_KEY_ID": creds["access_id"],
+            "AWS_SECRET_ACCESS_KEY": creds["secret"],
+            "AWS_S3_ENDPOINT": "eodata.dataspace.copernicus.eu",
+            "AWS_HTTPS": "YES",
+            "AWS_VIRTUAL_HOSTING": "FALSE",
+            "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
+            "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".tiff,.tif",
+        }
+        if creds.get("session_token"):
+            child_env["AWS_SESSION_TOKEN"] = creds["session_token"]
+
+        s3_vv = effective_meta.get("s3_vv")
+        s3_vh = effective_meta.get("s3_vh")
+        if s3_vv:
+            s3_vv = s3_vv.replace("s3://", "/vsis3/")
+        if s3_vh:
+            s3_vh = s3_vh.replace("s3://", "/vsis3/")
+
+        if not s3_vv:
+            try:
+                from app.infrastructure.adapters.copernicus.catalog import CopernicusCatalogClient
+                cat = CopernicusCatalogClient()
+                summary = await cat.get_scene_by_id(scene_id)
+                if summary and summary.scene_metadata:
+                    s3_vv = summary.scene_metadata.get("s3_vv")
+                    s3_vh = summary.scene_metadata.get("s3_vh")
+                    if s3_vv:
+                        s3_vv = s3_vv.replace("s3://", "/vsis3/")
+                    if s3_vh:
+                        s3_vh = s3_vh.replace("s3://", "/vsis3/")
+            except Exception as e:
+                logger.debug("STAC fallback query for S3 URIs failed: %s", e)
+
+        if not s3_vv:
+            safe_name = f"{clean_id}.SAFE"
+            year, month, day = clean_id[17:21], clean_id[21:23], clean_id[23:25]
+            s3_vv = f"/vsis3/eodata/Sentinel-1/SAR/IW_GRDH_1S-COG/{year}/{month}/{day}/{safe_name}/measurement/{clean_id.lower()}-vv-cog.tiff"
+
+        # Determine window to extract at native resolution
+        if window:
+            win_x, win_y, win_w, win_h = window
+        else:
+            # Default to maritime corridor region around center of scene
+            win_w = min(3000, orig_w)
+            win_h = min(3000, orig_h)
+            win_x = max(0, min(6000, orig_w - win_w))
+            win_y = max(0, min(3000, orig_h - win_h))
+
+        out_vv = target_path / f"native_win_{win_x}_{win_y}_vv.tiff"
+        out_vh = target_path / f"native_win_{win_x}_{win_y}_vh.tiff"
+
+        logger.info(
+            "Extracting native %dx%d raster window at offset (%d, %d) from COG %s",
+            win_w, win_h, win_x, win_y, s3_vv,
+        )
+
+        # Extract VV slice if not already cached
+        if not (out_vv.exists() and out_vv.stat().st_size > 0):
+            cmd_vv = [
+                gdal_bin,
+                "-srcwin", str(win_x), str(win_y), str(win_w), str(win_h),
+                "-co", "COMPRESS=DEFLATE",
+                s3_vv,
+                str(out_vv),
+            ]
+            res_vv = subprocess.run(cmd_vv, capture_output=True, text=True, env=child_env, timeout=120.0)
+            if res_vv.returncode != 0:
+                err_clean = res_vv.stderr.replace(creds.get("access_id", ""), "[REDACTED]").replace(creds.get("secret", ""), "[REDACTED]")
+                logger.warning("GDAL native range extraction failed for VV (code %d): %s", res_vv.returncode, err_clean[:200])
+                return []
+
+        # Extract VH slice if available and not already cached
+        if s3_vh and not (out_vh.exists() and out_vh.stat().st_size > 0):
+            cmd_vh = [
+                gdal_bin,
+                "-srcwin", str(win_x), str(win_y), str(win_w), str(win_h),
+                "-co", "COMPRESS=DEFLATE",
+                s3_vh,
+                str(out_vh),
+            ]
+            subprocess.run(cmd_vh, capture_output=True, text=True, env=child_env, timeout=120.0)
+
+        vv_arr = np.array(Image.open(str(out_vv))).astype(np.float32)
+        vh_arr = np.array(Image.open(str(out_vh))).astype(np.float32) if out_vh.exists() and out_vh.stat().st_size > 0 else None
+
+        pre = SARPreprocessor(tile_size=chip_size, tile_overlap=chip_size - stride)
+        fused_window = pre.prepare_multichannel_sar(vv_arr, vh_arr)
+
+        chips = pre.generate_native_chips(
+            raster_image=fused_window,
+            window_x_offset=win_x,
+            window_y_offset=win_y,
+            parent_width=orig_w,
+            parent_height=orig_h,
+            stride=stride,
+            chip_size=chip_size,
+            modality="GRD",
+        )
+
+        if max_chips and len(chips) > max_chips:
+            chips = chips[:max_chips]
+
+        return chips

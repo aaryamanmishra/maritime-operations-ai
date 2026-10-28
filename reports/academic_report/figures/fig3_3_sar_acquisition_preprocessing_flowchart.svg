@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 580" width="800" height="580">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="400.0" y="30" class="title">Fig 3.3: Sentinel-1 SAR Acquisition and Preprocessing Flowchart</text>
+  
+  <defs>
+    <marker id="arr3" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect x="250" y="50" width="300" height="40" class="box-rect" />
+  <text x="400" y="75" class="box-title">Sentinel-1 Scene Selected from CDSE Catalog</text>
+
+  <line x1="400" y1="90" x2="400" y2="120" class="edge-line" marker-end="url(#arr3)" />
+
+  <polygon points="400,120 520,155 400,190 280,155" fill="#fef3c7" stroke="#d97706" stroke-width="1.5" />
+  <text x="400" y="152" font-family="sans-serif" font-weight="bold" font-size="11px" fill="#92400e" text-anchor="middle">Scene in Local Cache?</text>
+
+  <line x1="520" y1="155" x2="620" y2="155" class="edge-line" />
+  <line x1="620" y1="155" x2="620" y2="210" class="edge-line" marker-end="url(#arr3)" />
+  <text x="560" y="145" class="box-text">No</text>
+  <rect x="520" y="210" width="200" height="40" class="box-rect" />
+  <text x="620" y="235" class="box-title">Stream OData Zip/SAFE Archive</text>
+
+  <line x1="280" y1="155" x2="180" y2="155" class="edge-line" />
+  <line x1="180" y1="155" x2="180" y2="210" class="edge-line" marker-end="url(#arr3)" />
+  <text x="240" y="145" class="box-text">Yes</text>
+  <rect x="80" y="210" width="200" height="40" class="box-rect" />
+  <text x="180" y="235" class="box-title">Load GeoTIFF from Disk</text>
+
+  <line x1="180" y1="250" x2="350" y2="290" class="edge-line" marker-end="url(#arr3)" />
+  <line x1="620" y1="250" x2="450" y2="290" class="edge-line" marker-end="url(#arr3)" />
+
+  <rect x="250" y="290" width="300" height="40" class="box-rect" />
+  <text x="400" y="315" class="box-title">Extract VV and VH Measurement Bands</text>
+
+  <line x1="400" y1="330" x2="400" y2="360" class="edge-line" marker-end="url(#arr3)" />
+
+  <rect x="220" y="360" width="360" height="45" class="box-rect" />
+  <text x="400" y="380" class="box-title">Percentile Clip Normalization (2.0% - 99.5%)</text>
+  <text x="400" y="395" class="box-text">Eliminates extreme speckle outliers, maps to 0-255 uint8</text>
+
+  <line x1="400" y1="405" x2="400" y2="435" class="edge-line" marker-end="url(#arr3)" />
+
+  <rect x="220" y="435" width="360" height="45" class="box-rect" />
+  <text x="400" y="455" class="box-title">Dual-Polarization Fusion Stack</text>
+  <text x="400" y="470" class="box-text">Channel 0 = VV, Channel 1 = VH, Channel 2 = (VV+VH)/2</text>
+
+  <line x1="400" y1="480" x2="400" y2="510" class="edge-line" marker-end="url(#arr3)" />
+
+  <rect x="220" y="510" width="360" height="40" fill="#eff6ff" stroke="#2563eb" stroke-width="2" rx="6" />
+  <text x="400" y="535" class="box-title">Native-Resolution 640x640 Sliding-Window Tiler</text>
+
+</svg>

@@ -28,6 +28,22 @@ class NormalizedVesselEvent(BaseModel):
     beam: float | None = None
     draught: float | None = None
 
+    @field_validator("sog", mode="before")
+    @classmethod
+    def normalize_sog(cls, v):
+        # AIS standard: 102.3 indicates speed not available (or > 102.2 knots)
+        if v is not None and (v >= 102.3 or v < 0):
+            return None
+        return v
+
+    @field_validator("cog", mode="before")
+    @classmethod
+    def normalize_cog(cls, v):
+        # AIS standard: 360.0 indicates course not available
+        if v is not None and (v >= 360.0 or v < 0):
+            return None
+        return v
+
     @field_validator("heading", mode="before")
     @classmethod
     def normalize_heading(cls, v):

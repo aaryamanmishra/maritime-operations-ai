@@ -1,0 +1,5 @@
+Experiment Identifier,Base Architecture,Input Dimensions,Target Epochs,Best Epoch,Batch Size,Optimizer & LR,Augmentations,Hardware Platform
+OpenSAR YOLO11s Baseline,YOLO11s DetectionModel,640 x 640 x 3,100 (Early stopped at 45),Epoch 25,16,"SGD (lr0=0.01, momentum=0.937)",Default YOLO augmentations,Kaggle NVIDIA Tesla T4 GPU (16 GB)
+OpenSAR YOLO11s Paper Run,YOLO11s DetectionModel,512 x 512 x 3,100 (Early stopped at 37),Epoch 17,16,"SGD (lr0=0.01, momentum=0.937)","Reduced resolution, early stop patience 20",Kaggle NVIDIA Tesla T4 GPU (16 GB)
+LS-SSDD-v1.0 Phase 6 Production,YOLO11n DetectionModel,640 x 640 x 3,5,Epoch 5,16,"AdamW (lr0=0.003, lrf=0.01)","Radar-adapted: hsv=0, fliplr=0.5, flipud=0.5",Docker Desktop (Intel Core i7-1185G7 CPU)
+YOLOv8s-LS-SSDD-v1.0 (Candidate),YOLOv8s DetectionModel,800 x 800 x 3,100,Epoch 82,16,"AdamW (lr0=0.003, lrf=0.01)","Radar-adapted: hsv=0, fliplr=0.5, flipud=0.5",Kaggle NVIDIA Tesla T4 GPU (16 GB)

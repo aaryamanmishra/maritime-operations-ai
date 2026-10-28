@@ -1,0 +1,9 @@
+Module Name,Primary Source Directory,Key Architectural Classes,Functional Responsibility
+SAR Acquisition Adapter,backend/app/infrastructure/adapters/copernicus/,"CopernicusCatalogClient, CopernicusAcquisitionClient","Queries CDSE STAC API, authenticates OData tokens, streams Sentinel-1 GRD/SLC scenes"
+SAR Preprocessing & Tiling,backend/app/infrastructure/adapters/copernicus/,"SARPreprocessor, SLCSARPreprocessor, SARTile","Performs 2-99.5% percentile clip normalization, dual-polarization stacking, sliding-window 640x640 slicing"
+SAR Detection Engine,backend/app/domain/sar_intelligence/,"YOLO26sVesselDetector, non_max_suppression_boxes","Executes deep-learning vessel localization, intra-tile NMS, and cross-tile duplicate suppression"
+Georeferencing Module,backend/app/infrastructure/adapters/copernicus/,"SARGeoreferencer, GeoPoint, PixelPoint",Performs piecewise bilinear GCP interpolation from raster pixels to WGS84 coordinates
+AIS Ingestion Worker,backend/app/workers/,"AISStreamClient, AIVDMParser, VesselRepository","Connects to live AISStream WebSocket, filters regional BBox, batches inserts into PostGIS and Redis"
+Spatiotemporal Correlation,backend/app/domain/sar_intelligence/,AISSARCorrelationEngine,"Computes kinematic dead reckoning, 3-component uncertainty budget, and Gaussian likelihood match score"
+Tactical Frontend UI,frontend/src/components/,"MaritimeMap, DarkVesselControlPanel, RoutingControlPanel","Visualizes real-time AIS traffic, high-contrast SAR footprints, dark-vessel alerts, and provenance dossiers"
+Weather Routing Optimizer,backend/app/domain/weather_routing/,"WeatherRoutingService, VesselPerformanceTFT",Applies deep-learning Temporal Fusion Transformer and Kwon model to optimize voyage paths

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 500" width="880" height="500">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 18px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; fill: #64748b; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-header { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 6; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+    .edge-label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10px; fill: #475569; text-anchor: middle; background: white; }
+    .status-dark { fill: #fee2e2; stroke: #dc2626; stroke-width: 2; rx: 6; }
+    .status-matched { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; rx: 6; }
+    .status-review { fill: #fef3c7; stroke: #d97706; stroke-width: 2; rx: 6; }
+    .status-text-dark { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: bold; fill: #991b1b; text-anchor: middle; }
+    .status-text-matched { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: bold; fill: #166534; text-anchor: middle; }
+    .status-text-review { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: bold; fill: #92400e; text-anchor: middle; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="440.0" y="30" class="title">Fig 3.9: Dark-Vessel Candidate Ethical Classification Flowchart</text>
+  
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect x="300" y="60" width="280" height="45" class="box-rect" />
+  <text x="440" y="87" class="box-title">SAR Vessel Detection Localized &amp; Georeferenced</text>
+
+  <line x1="440" y1="105" x2="440" y2="140" class="edge-line" marker-end="url(#arrow)" />
+  
+  <rect x="280" y="140" width="320" height="50" class="box-rect" fill="#f1f5f9" />
+  <text x="440" y="162" class="box-title">Spatiotemporal Kinematic Matching</text>
+  <text x="440" y="178" class="box-text">Query ±15 min, 4.5km Gate, Compute Uncertainty Budget</text>
+
+  <line x1="440" y1="190" x2="440" y2="230" class="edge-line" marker-end="url(#arrow)" />
+
+  <!-- Decision diamond represented as polygon -->
+  <polygon points="440,230 620,280 440,330 260,280" fill="#e0e7ff" stroke="#4338ca" stroke-width="2" />
+  <text x="440" y="275" font-family="sans-serif" font-weight="bold" font-size="12px" fill="#312e81" text-anchor="middle">Classification Gate</text>
+  <text x="440" y="292" font-family="sans-serif" font-size="10px" fill="#4338ca" text-anchor="middle">Evaluation of z-score and distance</text>
+
+  <!-- 4 Outcome Boxes -->
+  <line x1="260" y1="280" x2="120" y2="380" class="edge-line" marker-end="url(#arrow)" />
+  <rect x="20" y="380" width="200" height="90" class="status-matched" />
+  <text x="120" y="405" class="status-text-matched">AIS-MATCHED</text>
+  <text x="120" y="425" class="box-text">Verified Commercial Traffic</text>
+  <text x="120" y="440" class="box-text">dist &lt;= 3km and z &lt;= 2.5</text>
+  <text x="120" y="455" class="box-text">Record matched MMSI &amp; name</text>
+
+  <line x1="380" y1="320" x2="330" y2="380" class="edge-line" marker-end="url(#arrow)" />
+  <rect x="230" y="380" width="200" height="90" class="status-review" />
+  <text x="330" y="405" class="status-text-review">AMBIGUOUS / REVIEW</text>
+  <text x="330" y="425" class="box-text">Soft-Edge Boundary Candidate</text>
+  <text x="330" y="440" class="box-text">2.5 &lt; z &lt;= 4.0 or soft gate</text>
+  <text x="330" y="455" class="box-text">Tactical Analyst Review</text>
+
+  <line x1="500" y1="320" x2="550" y2="380" class="edge-line" marker-end="url(#arrow)" />
+  <rect x="450" y="380" width="200" height="90" class="status-dark" />
+  <text x="550" y="405" class="status-text-dark">AIS-UNMATCHED</text>
+  <text x="550" y="425" class="box-text">Potential Dark-Vessel</text>
+  <text x="550" y="440" class="box-text">Active AIS coverage in 35km</text>
+  <text x="550" y="455" class="box-text">Flag High-Priority Interdiction</text>
+
+  <line x1="620" y1="280" x2="760" y2="380" class="edge-line" marker-end="url(#arrow)" />
+  <rect x="660" y="380" width="200" height="90" fill="#f1f5f9" stroke="#64748b" stroke-width="2" rx="6" />
+  <text x="760" y="405" font-family="sans-serif" font-weight="bold" font-size="12px" fill="#475569" text-anchor="middle">INSUFFICIENT-COVERAGE</text>
+  <text x="760" y="425" class="box-text">Operational Blindspot</text>
+  <text x="760" y="440" class="box-text">Zero AIS pings in 35km</text>
+  <text x="760" y="455" class="box-text">Non-reporting territory</text>
+
+</svg>

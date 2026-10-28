@@ -464,4 +464,64 @@ describe('DarkVesselControlPanel Geographic Context Integration', () => {
     expect(screen.getByText('PLAUSIBLE_WATER')).toBeInTheDocument();
     expect(screen.getByText('yolo26s-sar-v1')).toBeInTheDocument();
   });
+
+  it('correctly renders distinct status badges for AIS-MATCHED, AIS-UNMATCHED, and AIS COMPARISON UNAVAILABLE', async () => {
+    const mixedDetections: SARDetectionItem[] = [
+      {
+        detection_id: 'sar-det-matched',
+        scene_id: 'S1A_TEST_SCENE',
+        acquisition_time: '2026-10-26T08:00:00Z',
+        latitude: 50.1,
+        longitude: -1.0,
+        confidence: 0.88,
+        model_version: 'yolo26s-opensar-v1',
+        match_status: 'AIS-MATCHED',
+        candidate_mmsi: 123456789,
+        distance_km: 0.5,
+        time_difference_seconds: 30,
+        surface_context: 'PLAUSIBLE_WATER',
+        is_operational_vessel: true,
+      },
+      {
+        detection_id: 'sar-det-unmatched',
+        scene_id: 'S1A_TEST_SCENE',
+        acquisition_time: '2026-10-26T08:00:00Z',
+        latitude: 50.2,
+        longitude: -1.1,
+        confidence: 0.75,
+        model_version: 'yolo26s-opensar-v1',
+        match_status: 'AIS-UNMATCHED',
+        surface_context: 'PLAUSIBLE_WATER',
+        is_operational_vessel: true,
+      },
+      {
+        detection_id: 'sar-det-nocov',
+        scene_id: 'S1A_TEST_SCENE',
+        acquisition_time: '2026-10-26T08:00:00Z',
+        latitude: 50.3,
+        longitude: -1.2,
+        confidence: 0.65,
+        model_version: 'yolo26s-opensar-v1',
+        match_status: 'AIS COMPARISON UNAVAILABLE',
+        surface_context: 'PLAUSIBLE_WATER',
+        is_operational_vessel: true,
+      },
+    ];
+
+    render(
+      <DarkVesselControlPanel
+        onSceneSelect={mockOnSceneSelect}
+        onDetectionsLoaded={mockOnDetectionsLoaded}
+        onSelectDetection={mockOnSelectDetection}
+        selectedDetection={mixedDetections[0]}
+        initialDetections={mixedDetections}
+      />
+    );
+
+    expect(screen.getByTestId('operational-vessels-count')).toHaveTextContent('3 Operational Vessels');
+    expect(screen.getByTestId('matched-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('unmatched-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('no-coverage-count')).toHaveTextContent('1');
+    expect(screen.getByText('NO COVERAGE')).toBeInTheDocument();
+  });
 });

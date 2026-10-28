@@ -1,0 +1,15 @@
+flowchart TD
+    Start([Sentinel-1 Scene Selected]) --> QueryCDSE[Query Copernicus Data Space Ecosystem API]
+    QueryCDSE --> CheckCache{Scene Cached in Local Storage?}
+    CheckCache -- Yes --> LoadLocal[Load Native GeoTIFF Measurement Bands from Disk]
+    CheckCache -- No --> DownloadSAFE[Stream Zip/SAFE Archive via CDSE OData Access Token]
+    DownloadSAFE --> ExtractBands[Extract Measurement Bands: VV and VH Polarizations]
+    LoadLocal --> Radiometric[Radiometric Decibel Transformation and Noise Floor Mitigation]
+    ExtractBands --> Radiometric
+
+    Radiometric --> PercentileNorm["Dynamic Percentile Normalization: 2nd to 99.5th Percentile Clip"]
+    PercentileNorm --> StackChans["Dual-Polarization Fusion: Channel 0=VV, Channel 1=VH, Channel 2=(VV+VH)/2"]
+    StackChans --> ParseGCP[Parse Geolocation Grid Points from Product Annotation XML]
+    ParseGCP --> ExtractFootprint[Extract Scene Geographic Footprint Polygon WGS84]
+    ExtractFootprint --> TilingEngine["Sliding-Window Native Slicing Engine: Chip Size=640x640, Overlap=64px"]
+    TilingEngine --> OutputChips([Output Preprocessed Native Radar Chips to Inference Queue])

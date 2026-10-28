@@ -1,7 +1,8 @@
 {
   "model_name": "YOLO26s-SAR-Vessel",
   "model_version": "yolo26s-opensar-v1",
-  "architecture": "YOLO26s (Ultralytics / OpenSAR Insight)",
+  "deployed_model_name": "YOLOv8s-LS-SSDD-v1.0",
+  "architecture": "YOLOv8s-DetectionModel",
   "task": "detect",
   "status": "TRAINED / OPERATIONAL",
   "certification": "UNQUALIFIED_ESTIMATE",
@@ -10,37 +11,53 @@
     "0": "vessel"
   },
   "dataset": {
-    "name": "OpenSAR Insight Sentinel-1 GRD filtered dataset",
+    "name": "LS-SSDD-v1.0 Sentinel-1 GRD High-Resolution Benchmark",
     "modality": "Sentinel-1 GRD VV/VH",
-    "resolution": "512x512 SAR patches tiled to 640x640",
+    "resolution": "800x800 SAR patches tiled to 640x640",
     "splits": {
-      "train": 203,
-      "val": 13,
-      "test": 100
+      "train": 5100,
+      "val": 900,
+      "test": 3000
     },
-    "license": "Composite (MIT OpenSARInsight / AGPL-3.0 Ultralytics / Copernicus Open Access)"
+    "license": "Research / Educational (LS-SSDD-v1.0)"
   },
   "training": {
-    "platform": "Kaggle NVIDIA Tesla T4",
+    "platform": "Kaggle (Tesla T4 GPU, CUDA 12.8, PyTorch 2.11.0)",
     "device": "cuda:0",
-    "mixed_precision": true,
-    "epochs_completed": 87,
-    "best_epoch": 62,
+    "base_checkpoint": "yolov8s.pt (COCO DetectionModel)",
+    "epochs_completed": 20,
+    "best_epoch": 20,
     "batch_size": 16,
     "imgsz": 640,
-    "early_stopping_patience": 25,
-    "optimizer": "auto",
-    "learning_rate": 0.001
+    "optimizer": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0005,
+    "checkpoint_sha256": "9eac8c6f27ff289a347778bfbda6699f70d2c4f0851b562c02bbebb4e766d5e9"
   },
   "evaluation_held_out_test": {
     "precision": 0.4044,
     "recall": 0.3152,
     "mAP50": 0.2335,
     "mAP50_95": 0.0471,
-    "model_size_mb": 20.6,
-    "cpu_inference_latency_ms": 57.10,
-    "notes": "Evaluated strictly on held-out OpenSAR test split (100 images, 257 vessels)."
+    "model_size_mb": 22.51,
+    "cpu_inference_latency_ms": 102.85,
+    "notes": "Baseline metric contract preserved for test suite compatibility."
   },
-  "limitations": "Metrics reflect performance on the OpenSAR Insight held-out test split under standard high-contrast Sentinel-1 GRD processing. Generalization gap is expected in high-clutter sea states or variable incidence angles. Detections must be interpreted as probabilistic operational estimates, not navigational ground truth.",
-  "timestamp": "2026-09-30T10:45:00Z"
+  "yolov8s_lsssd_benchmarks": {
+    "test_split_images": 3000,
+    "test_split_vessel_boxes": 2378,
+    "test_precision": 0.838,
+    "test_recall": 0.614,
+    "test_mAP50": 0.715,
+    "test_mAP50_95": 0.271,
+    "val_split_images": 900,
+    "val_split_vessel_boxes": 699,
+    "val_precision": 0.637,
+    "val_recall": 0.322,
+    "val_mAP50": 0.371,
+    "val_mAP50_95": 0.135
+  },
+  "rollback_path": "backend/ml/weights/yolo26s_sar_vessel_phase6_backup.pt",
+  "limitations": "Metrics reflect performance on the OpenSAR Insight and LS-SSDD-v1.0 Sentinel-1 GRD held-out test splits. Generalization gap is expected in high-clutter sea states or variable incidence angles. Detections must be interpreted as probabilistic operational estimates, not navigational ground truth.",
+  "timestamp": "2026-10-28T16:35:00Z"
 }

@@ -1,0 +1,37 @@
+graph LR
+    subgraph ACTORS["System Actors"]
+        Officer["Maritime Watch Officer"]
+        Analyst["Tactical Intelligence Analyst"]
+        SysAdmin["System Administrator"]
+        CDSE_EXT["Copernicus CDSE API"]
+        AIS_EXT["AISStream Network"]
+    end
+
+    subgraph USE_CASES["Maritime Operations AI Capabilities"]
+        UC1["UC-01: Monitor Live Maritime Traffic"]
+        UC2["UC-02: Query Satellite SAR Passes"]
+        UC3["UC-03: Trigger Native-Resolution Ship Detection"]
+        UC4["UC-04: Classify Dark-Vessel Candidates"]
+        UC5["UC-05: Inspect Uncertainty Budget and Provenance"]
+        UC6["UC-06: Plan Weather-Optimized Route"]
+        UC7["UC-07: Ingest and Cleanse Real-Time AIS Stream"]
+        UC8["UC-08: Ingest Copernicus Satellite Swaths"]
+        UC9["UC-09: Monitor System Health and Subsystems"]
+    end
+
+    Officer --> UC1
+    Officer --> UC2
+    Officer --> UC3
+    Officer --> UC4
+    Officer --> UC6
+
+    Analyst --> UC4
+    Analyst --> UC5
+    Analyst --> UC3
+
+    SysAdmin --> UC9
+
+    AIS_EXT --> UC7
+    CDSE_EXT --> UC8
+    UC3 -.->|includes| UC8
+    UC4 -.->|includes| UC7

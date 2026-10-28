@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 430" width="580" height="430">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="290.0" y="30" class="title">Fig 3.11: Maritime Operations AI UML Use-Case Diagram</text>
+  
+  <defs>
+    <marker id="arr11" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <!-- Actors -->
+  <rect x="40" y="80" width="140" height="50" fill="#eff6ff" stroke="#2563eb" rx="6" />
+  <text x="110" y="105" class="box-title">Maritime Watch</text>
+  <text x="110" y="120" class="box-title">Officer</text>
+
+  <rect x="40" y="190" width="140" height="50" fill="#eff6ff" stroke="#2563eb" rx="6" />
+  <text x="110" y="215" class="box-title">Intelligence</text>
+  <text x="110" y="230" class="box-title">Analyst</text>
+
+  <rect x="40" y="300" width="140" height="50" fill="#f1f5f9" stroke="#64748b" rx="6" />
+  <text x="110" y="325" class="box-title">System</text>
+  <text x="110" y="340" class="box-title">Administrator</text>
+
+  <!-- Use cases -->
+  <ellipse cx="380" cy="80" rx="130" ry="25" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5" />
+  <text x="380" y="85" class="box-text">UC-01: Monitor Live Traffic</text>
+
+  <ellipse cx="380" cy="140" rx="130" ry="25" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5" />
+  <text x="380" y="145" class="box-text">UC-02: Query Satellite Swaths</text>
+
+  <ellipse cx="380" cy="200" rx="130" ry="25" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5" />
+  <text x="380" y="205" class="box-text">UC-03: Execute Ship Detection</text>
+
+  <ellipse cx="380" cy="260" rx="130" ry="25" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5" />
+  <text x="380" y="265" class="box-text">UC-04: Classify Dark Vessels</text>
+
+  <ellipse cx="380" cy="320" rx="130" ry="25" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5" />
+  <text x="380" y="325" class="box-text">UC-05: Inspect Provenance</text>
+
+  <ellipse cx="380" cy="380" rx="130" ry="25" fill="#f8fafc" stroke="#0284c7" stroke-width="1.5" />
+  <text x="380" y="385" class="box-text">UC-06: Plan Weather Route</text>
+
+  <!-- Connectors -->
+  <line x1="180" y1="105" x2="250" y2="80" class="edge-line" />
+  <line x1="180" y1="105" x2="250" y2="140" class="edge-line" />
+  <line x1="180" y1="105" x2="250" y2="200" class="edge-line" />
+  <line x1="180" y1="105" x2="250" y2="380" class="edge-line" />
+
+  <line x1="180" y1="215" x2="250" y2="200" class="edge-line" />
+  <line x1="180" y1="215" x2="250" y2="260" class="edge-line" />
+  <line x1="180" y1="215" x2="250" y2="320" class="edge-line" />
+
+  <line x1="180" y1="325" x2="250" y2="380" class="edge-line" />
+
+</svg>

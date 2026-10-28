@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 360" width="580" height="360">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="290.0" y="30" class="title">Fig 3.7: AIS Ingestion, In-Memory Caching, and PostGIS Storage Architecture</text>
+  
+  <defs>
+    <marker id="arr7" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect x="30" y="70" width="200" height="200" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" rx="6" />
+  <text x="130" y="95" class="box-title">AIS Ingestion Worker</text>
+  <rect x="45" y="115" width="170" height="35" class="box-rect" />
+  <text x="130" y="137" class="box-text">AIVDM Message Parser</text>
+  <rect x="45" y="160" width="170" height="35" class="box-rect" />
+  <text x="130" y="182" class="box-text">BBox Filter (49.5-51.5N)</text>
+  <rect x="45" y="205" width="170" height="35" class="box-rect" />
+  <text x="130" y="227" class="box-text">Kinematic Sanity Filter</text>
+
+  <line x1="230" y1="130" x2="310" y2="130" class="edge-line" marker-end="url(#arr7)" />
+  <line x1="230" y1="210" x2="310" y2="210" class="edge-line" marker-end="url(#arr7)" />
+
+  <rect x="310" y="70" width="220" height="110" fill="#fef2f2" stroke="#dc2626" stroke-width="2" rx="6" />
+  <text x="420" y="95" class="box-title">Redis 7 Ephemeral Cache</text>
+  <text x="420" y="120" class="box-text">GEOADD live_vessel_positions</text>
+  <text x="420" y="140" class="box-text">Pub/Sub: vessel_traffic_stream</text>
+  <text x="420" y="160" class="box-text">TTL Expiry = 3600 seconds</text>
+
+  <rect x="310" y="200" width="220" height="130" fill="#eff6ff" stroke="#2563eb" stroke-width="2" rx="6" />
+  <text x="420" y="225" class="box-title">PostGIS Spatial Database</text>
+  <text x="420" y="250" class="box-text">current_vessel_state (MMSI PK)</text>
+  <text x="420" y="270" class="box-text">vessel_position_history (Partitioned)</text>
+  <text x="420" y="290" class="box-text">GIST Spatial Index on geom</text>
+  <text x="420" y="310" class="box-text">B-Tree on (mmsi, timestamp)</text>
+
+</svg>

@@ -1,0 +1,9 @@
+HTTP Method,Endpoint Route,Request Payload,Response Schema,Functional Description
+GET,/api/health/live,None,HealthLiveResponse,Kubernetes liveness probe returning alive status
+GET,/api/health/ready,None,HealthReadyResponse,Readiness probe verifying active connections to PostGIS and Redis
+POST,/api/v1/sar/search,"SARSearchRequest (BBox, Dates, Modality)",List[SARSceneSummary],Searches Copernicus STAC catalog for available Sentinel-1 satellite passes
+POST,/api/v1/sar/jobs,"SARAnalyzeRequest (scene_id, modality)",SARJobResponse (202 Accepted),"Spawns asynchronous background job for scene acquisition, tiling, detection, and AIS matching"
+GET,/api/v1/sar/jobs/{job_id},job_id (Path string),SARJobResponse,"Polls progress status, completion percentage, and summary metrics of an active SAR job"
+GET,/api/v1/sar/scenes/{scene_id}/detections,scene_id (Path string),List[SARDetectionItem],"Retrieves localized vessel detections, bounding boxes, confidence, and AIS correlation records"
+GET,/api/v1/vessels/live,BBox query parameters,List[CurrentVesselState],Retrieves real-time AIS vessel positions within viewport from Redis cache
+POST,/api/v1/routing/optimize,RouteOptimizationRequest,RouteOptimizationResponse,Calculates weather-optimal maritime route with speed degradation using TFT neural surrogate

@@ -1,0 +1,60 @@
+artifact_name,relative_path,format,purpose,report_section,source,status
+Project Synopsis,synopsis/synopsis_content.md,Markdown,"Complete project synopsis with front matter, abstract, and 8 core sections",Index.docx Synopsis,Project Architecture & Results,available
+Chapter 1: Introduction,synopsis/chapter1_introduction.md,Markdown,"Project overview, problem statement, objectives, scope, applications",Chapter 1,docs/ARCHITECTURE.md,available
+Chapter 2: Literature Survey,literature/chapter2_literature_survey.md,Markdown,"Survey of CFAR, Sentinel-1 modes, LS-SSDD, SOTA baselines, comparative study",Chapter 2,Research Literature & Experiments,available
+Chapter 3: System Analysis & Design,system_design/chapter3_system_design.md,Markdown,"Requirements, architecture, use cases, ER diagram, module descriptions, API",Chapter 3,Codebase Architecture & Config,available
+Chapter 4: Implementation & Testing,implementation/chapter4_implementation_testing.md,Markdown,"Experimental setup, algorithms, test cases (109 passed), performance analysis",Chapter 4,Test Execution & Model Artifacts,available
+Chapter 5: Conclusion & Future Scope,implementation/chapter5_conclusion_future_scope.md,Markdown,"Demonstrated contributions, limitations, future roadmap",Chapter 5,System Capabilities & Roadmap,available
+Tools and Environment,implementation/tools_and_environment.md,Markdown,"Hardware, OS, package versions, container topology, setup commands",Chapter 4 / Appendix,"pyproject.toml, package.json",available
+Dataset & Model Experiments,experiments/dataset_and_model_experiments.md,Markdown,"Forensic audit of OpenSAR, LS-SSDD, YOLO11s, YOLO11n, and YOLOv8s runs",Chapter 4 / Appendix,Training Notebooks & Artifacts,available
+Georeferencing & AIS Correlation,experiments/georeferencing_and_ais_correlation.md,Markdown,"Mathematical GCP derivations, WGS84 invariants, kinematic uncertainty budget",Chapter 3 & 4 / Appendix,"coordinates.py, correlation.py",available
+Academic References,references/references.md,Markdown,Complete IEEE bibliography of 17 peer-reviewed papers and technical standards,References,Official DOI & Standard Registry,available
+Dataset & Software Sources,references/dataset_and_software_sources.md,Markdown,"Provenance, URLs, and licenses for CDSE, LS-SSDD, OpenSAR, AISStream",References / Appendix,Project Data Sources,available
+Figure Register,figures/figure_register.md,Markdown,"Master register of all visual figures with captions, sections, and types",List of Figures,Project Figures Directory,available
+Table Register,tables/table_register.md,Markdown,"Master register of all data tables with captions, sections, and types",List of Tables,Project Tables Directory,available
+Fig 3.1 Overall Architecture (SVG),figures/fig3_1_overall_system_architecture.svg,SVG,Rendered vector diagram of 5-tier system topology,"Chapter 3, Section 3.2","docker-compose.yml, architecture",available
+Fig 3.1 Overall Architecture (Mermaid),figures/fig3_1_overall_system_architecture.mmd,Mermaid,Editable diagram source file for Fig 3.1,"Chapter 3, Section 3.2","docker-compose.yml, architecture",available
+Fig 3.2 End-to-End Data Flow (SVG),figures/fig3_2_end_to_end_data_flow.svg,SVG,Rendered vector sequence diagram of acquisition to visualization,"Chapter 3, Section 3.7","service.py, API workflows",available
+Fig 3.2 End-to-End Data Flow (Mermaid),figures/fig3_2_end_to_end_data_flow.mmd,Mermaid,Editable diagram source file for Fig 3.2,"Chapter 3, Section 3.7","service.py, API workflows",available
+Fig 3.3 SAR Acquisition Flowchart (SVG),figures/fig3_3_sar_acquisition_preprocessing_flowchart.svg,SVG,Rendered vector flowchart for CDSE download and calibration,"Chapter 3, Section 3.5.1",copernicus/ preprocessing,available
+Fig 3.3 SAR Acquisition Flowchart (Mermaid),figures/fig3_3_sar_acquisition_preprocessing_flowchart.mmd,Mermaid,Editable diagram source file for Fig 3.3,"Chapter 3, Section 3.5.1",copernicus/ preprocessing,available
+Fig 3.4 Native Tiling Diagram (SVG),figures/fig3_4_native_resolution_chip_extraction.svg,SVG,Rendered vector diagram of 640x640 sliding-window slicing,"Chapter 3, Section 3.5.2",preprocessing.py,available
+Fig 3.4 Native Tiling Diagram (Mermaid),figures/fig3_4_native_resolution_chip_extraction.mmd,Mermaid,Editable diagram source file for Fig 3.4,"Chapter 3, Section 3.5.2",preprocessing.py,available
+Fig 3.5 Detection Pipeline (SVG),figures/fig3_5_ship_detection_inference_pipeline.svg,SVG,Rendered vector flowchart of YOLO anchor-free head & NMS,"Chapter 3, Section 3.5.3",inference.py,available
+Fig 3.5 Detection Pipeline (Mermaid),figures/fig3_5_ship_detection_inference_pipeline.mmd,Mermaid,Editable diagram source file for Fig 3.5,"Chapter 3, Section 3.5.3",inference.py,available
+Fig 3.6 GCP Georeferencing Flowchart (SVG),figures/fig3_6_pixel_to_geo_coordinate_transformation_flowchart.svg,SVG,Rendered vector flowchart of bisection search & bilinear surface,"Chapter 3, Section 3.5.4",georeference.py,available
+Fig 3.6 GCP Georeferencing Flowchart (Mermaid),figures/fig3_6_pixel_to_geo_coordinate_transformation_flowchart.mmd,Mermaid,Editable diagram source file for Fig 3.6,"Chapter 3, Section 3.5.4",georeference.py,available
+Fig 3.7 AIS Ingestion Architecture (SVG),figures/fig3_7_ais_ingestion_storage_architecture.svg,SVG,"Rendered vector diagram of worker, Redis cache, and PostGIS","Chapter 3, Section 3.5.5",ais_worker.py,available
+Fig 3.7 AIS Ingestion Architecture (Mermaid),figures/fig3_7_ais_ingestion_storage_architecture.mmd,Mermaid,Editable diagram source file for Fig 3.7,"Chapter 3, Section 3.5.5",ais_worker.py,available
+Fig 3.8 Kinematic Correlation Flowchart (SVG),figures/fig3_8_sar_ais_temporal_spatial_matching_flowchart.svg,SVG,Rendered vector flowchart of dead reckoning & uncertainty gates,"Chapter 3, Section 3.5.6",correlation.py,available
+Fig 3.8 Kinematic Correlation Flowchart (Mermaid),figures/fig3_8_sar_ais_temporal_spatial_matching_flowchart.mmd,Mermaid,Editable diagram source file for Fig 3.8,"Chapter 3, Section 3.5.6",correlation.py,available
+Fig 3.9 Dark-Vessel Classification (SVG),figures/fig3_9_dark_vessel_candidate_classification.svg,SVG,Rendered vector flowchart of 4-tier ethical decision taxonomy,"Chapter 3, Section 3.8",models.py,available
+Fig 3.9 Dark-Vessel Classification (Mermaid),figures/fig3_9_dark_vessel_candidate_classification.mmd,Mermaid,Editable diagram source file for Fig 3.9,"Chapter 3, Section 3.8",models.py,available
+Fig 3.10 Database ER Diagram (SVG),figures/fig3_10_database_er_diagram.svg,SVG,Rendered vector relational schema diagram with spatial indices,"Chapter 3, Section 3.4",database models,available
+Fig 3.10 Database ER Diagram (Mermaid),figures/fig3_10_database_er_diagram.mmd,Mermaid,Editable diagram source file for Fig 3.10,"Chapter 3, Section 3.4",database models,available
+Fig 3.11 UML Use-Case Diagram (SVG),figures/fig3_11_uml_use_case_diagram.svg,SVG,Rendered vector UML use-case diagram of operators & capabilities,"Chapter 3, Section 3.3",docs/ARCHITECTURE.md,available
+Fig 3.11 UML Use-Case Diagram (Mermaid),figures/fig3_11_uml_use_case_diagram.mmd,Mermaid,Editable diagram source file for Fig 3.11,"Chapter 3, Section 3.3",docs/ARCHITECTURE.md,available
+Fig 3.12 Backend-Frontend Interaction (SVG),figures/fig3_12_backend_frontend_interaction.svg,SVG,Rendered vector sequence diagram of UI polling & layer rendering,"Chapter 3, Section 3.7",DarkVesselControlPanel.tsx,available
+Fig 3.12 Backend-Frontend Interaction (Mermaid),figures/fig3_12_backend_frontend_interaction.mmd,Mermaid,Editable diagram source file for Fig 3.12,"Chapter 3, Section 3.7",DarkVesselControlPanel.tsx,available
+Fig 4.3 Model Performance Comparison (PNG/SVG),figures/fig4_3_model_performance_comparison.png,PNG,"Bar chart of mAP50, precision, and recall across models","Chapter 4, Section 4.5.1",Evaluation benchmarks,available
+Fig 4.4 Inshore vs Offshore Clutter (PNG/SVG),figures/fig4_4_inshore_vs_offshore_clutter.png,PNG,Dual-axis chart of coastal vs open-ocean clutter resilience,"Chapter 4, Section 4.5.2",phase6_lsssd_evaluation_results.json,available
+Fig 4.5 Domain Compatibility Benchmark (PNG/SVG),figures/fig4_5_grd_slc_domain_compatibility.png,PNG,Chart comparing GRD and SLC model detections on real swaths,"Chapter 4, Section 4.5.3",grd_compatibility_results.json,available
+Fig 4.6 Uncertainty Budget Breakdown (PNG/SVG),figures/fig4_6_uncertainty_budget_breakdown.png,PNG,Curve plot of dynamic uncertainty budget scaling vs time delta,"Chapter 4, Section 4.5.5",correlation.py mathematical model,available
+Table 3.1 Hardware Requirements,tables/table3_1_hardware_requirements.csv,CSV,Hardware infrastructure requirements and operational roles,"Chapter 3, Section 3.1.1",System environment audit,available
+Table 3.2 Software Requirements,tables/table3_2_software_requirements.csv,CSV,"Software packages, frameworks, versions, and licenses","Chapter 3, Section 3.1.2","pyproject.toml, package.json",available
+Table 3.3 Core Project Modules,tables/table3_3_project_modules.csv,CSV,Architecture module inventory with classes and responsibilities,"Chapter 3, Section 3.5",Codebase audit,available
+Table 3.4 REST API Endpoints,tables/table3_4_api_endpoints.csv,CSV,"HTTP endpoints, methods, payloads, and response schemas","Chapter 3, Section 3.6",backend routes,available
+Table 4.1 Dataset Statistics,tables/table4_1_dataset_statistics.csv,CSV,"LS-SSDD and OpenSAR chip counts, splits, and modalities","Chapter 4, Section 4.1",Dataset manifests,available
+Table 4.2 Training Configurations,tables/table4_2_training_configurations.csv,CSV,"Hyperparameters, batch sizes, optimizers, and learning rates","Chapter 4, Section 4.1",Training logs and args.yaml,available
+Table 4.3 Model Performance Matrix,tables/table4_3_model_performance_comparison.csv,CSV,"Quantitative metrics (P, R, mAP50, mAP50-95, latency)","Chapter 4, Section 4.5.1",Evaluation benchmarks,available
+Table 4.4 Automated Test Cases,tables/table4_4_test_cases_results.csv,CSV,"Complete test suite inventory (15 files, 109 tests passed)","Chapter 4, Section 4.4",Container test execution log,available
+Table 4.5 Existing vs Proposed System,tables/table4_5_existing_vs_proposed_system.csv,CSV,Detailed feature-by-feature comparative analysis,"Chapter 4, Section 4.7",Comparative capability analysis,available
+Table 4.6 Research Literature Comparison,tables/table4_6_research_paper_comparison.csv,CSV,"Comparative study of published papers, datasets, and results","Chapter 2, Section 2.4",Published research literature,available
+Fig 4.7 Dashboard Screenshot,screenshots/screenshot_main_dashboard.png,PNG,Real screenshot of live React/MapLibre GL tactical dashboard,"Chapter 4, Section 4.3",Live application at port 5173,available
+Fig 4.8 Sentinel-1 Real Scene Swath,screenshots/sentinel1_real_scene_fused.png,PNG,Real Copernicus Sentinel-1C English Channel radar swath,"Chapter 4, Section 4.3",sar_cache GeoTIFF export,available
+Fig 4.9 Native Radar Chips,screenshots/lsssd_training_train_batch0.jpg,JPG,Native-resolution 640x640 LS-SSDD radar training chips,"Chapter 4, Section 4.3",train_runs/batch4_test,available
+Fig 4.10 Detection Overlays,screenshots/opensar_baseline_val_batch0_pred.jpg,JPG,Deep-learning bounding box overlays on test batches,"Chapter 4, Section 4.3",all_runs_and_artifacts,available
+Fig 4.1 Precision-Recall Curve,figures/opensar_baseline_BoxPR_curve.png,PNG,Measured PR curve on OpenSAR 950-image held-out test split,"Chapter 4, Section 4.3",all_runs_and_artifacts,available
+Fig 4.2 Normalized Confusion Matrix,figures/opensar_baseline_confusion_matrix_normalized.png,PNG,Measured confusion matrix on held-out test split,"Chapter 4, Section 4.3",all_runs_and_artifacts,available
+Fig 4.11 F1-Confidence Curve,figures/opensar_baseline_BoxF1_curve.png,PNG,Measured F1 vs confidence score curve,"Chapter 4, Section 4.3",all_runs_and_artifacts,available
+Fig 4.12 Precision-Confidence Curve,figures/opensar_baseline_BoxP_curve.png,PNG,Measured Precision vs confidence score curve,"Chapter 4, Section 4.3",all_runs_and_artifacts,available

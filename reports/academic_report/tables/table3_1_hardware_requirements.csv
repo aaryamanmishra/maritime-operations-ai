@@ -1,0 +1,6 @@
+Component,Minimum Requirement,Development Workstation,Kaggle / Colab Cloud GPU,Purpose in System
+Processor (CPU),4 Cores (x86_64),"Intel Core i7-1185G7 (8 Threads, 3.00 GHz)",Intel Xeon (2 vCPUs),"Native Sentinel-1 tiling, georeferencing, FastAPI concurrency"
+System Memory (RAM),16 GB DDR4,32 GB DDR4-3200,13.0 GB High-RAM,Sliding-window raster array manipulation and GeoTIFF band stacking
+GPU Accelerator,N/A (CPU fallback supported),Intel Iris Xe Graphics (Shared),"NVIDIA Tesla T4 (16 GB GDDR6 VRAM, CUDA 12.2 / 13.0)",High-throughput YOLO training and batched model evaluation
+Storage Space,20 GB NVMe SSD,1 TB NVMe SSD (PCIe 4.0),20 GB Temporary Scratch,Local caching of Sentinel-1 COG measurement bands and model weights
+Network Interface,10 Mbps Broadband,1 Gbps Fiber Ethernet,100 Mbps Cloud Backbone,Copernicus CDSE scene streaming and live AISStream WebSocket

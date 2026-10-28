@@ -61,7 +61,9 @@ frontend/dist-ssr/
 # Data / Model Weights (Local large blobs)
 ml/weights/*.onnx
 ml/weights/*.pt
-ml/weights/*.pth
+!ml/weights/ls_ssdd_yolov8s_20epoch_best.pt
+ml/weights/*.pt
+!ml/weights/ls_ssdd_yolov8s_20epoch_best.pth
 ml/kaggle/*.zip
 data/sample_sar/*.zip
 data/sample_sar/*.SAFE
@@ -78,3 +80,15 @@ runs/
 data/sar_cache/
 backend/data/sar_cache/
 artifacts/
+
+backend/data/yolo_lsssd/
+backend/data/yolo_lsssd_full/
+backend/data/train_runs/
+backend/data/gt_samples/
+backend/data/opensar_samples/
+backend/ml/weights/*backup*.pt
+backend/ml/weights/experimental/
+backend/yolo11*.pt
+backend/yolo8*.pt
+
+!ml/weights/ls_ssdd_yolov8s_20epoch_best.pt

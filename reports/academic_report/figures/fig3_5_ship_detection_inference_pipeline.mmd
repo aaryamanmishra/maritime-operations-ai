@@ -1,0 +1,17 @@
+flowchart TD
+    ChipsIn([Native 640x640 Radar Chips]) --> Backbone["YOLO Backbone: Modified CSPDarknet / C3k2 Blocks"]
+    Backbone --> SPPF["SPPF Spatial Pyramid Pooling Fast (Multi-Scale Receptive Field)"]
+    SPPF --> Neck["Path Aggregation PANet Neck (Multi-Scale Feature Fusion)"]
+    Neck --> DecoupledHead["Decoupled Anchor-Free Detection Head"]
+
+    DecoupledHead --> ClsBranch["Classification Branch: Vessel Probability"]
+    DecoupledHead --> RegBranch["Regression Branch: Bounding Box Coordinates (xc, yc, w, h)"]
+
+    ClsBranch & RegBranch --> RawFilter{"Confidence >= 0.25 Threshold?"}
+    RawFilter -- No --> DiscardClutter([Discarded as Ocean Clutter])
+    RawFilter -- Yes --> LocalNMS["Intra-Tile Non-Maximum Suppression (IoU >= 0.35)"]
+
+    LocalNMS --> MapToScene["Transform Chip BBox to Parent Scene Coordinates: X = x + x_offset, Y = y + y_offset"]
+    MapToScene --> CrossTileDeduplication{"Overlap Band Deduplication: IoU >= 0.30 or Near-Concentric IoMin >= 0.50?"}
+    CrossTileDeduplication -- Duplicate --> SuppressTwin["Suppress Twin Detection, Retain Primary and Link Provenance"]
+    CrossTileDeduplication -- Unique --> OperationalDet([Operational SAR Vessel Detection Candidate])

@@ -1,0 +1,54 @@
+{
+  "dataset": "LS-SSDD-v1.0 (Official 15 Large-Scale Sentinel-1 Scenes)",
+  "dataset_split_strategy": "Strict Scene-Level Holdout (Scenes 01-10 Train/Val, Scenes 11-15 Test)",
+  "base_architecture": "Ultralytics YOLO11n DetectionModel",
+  "timestamp": "2026-10-26T12:56:24.660384+00:00",
+  "training_parameters": {
+    "epochs": 5,
+    "batch_size": 16,
+    "imgsz": 640,
+    "optimizer": "AdamW",
+    "seed": 42,
+    "duration_seconds": 6856.15
+  },
+  "validation_metrics": {
+    "precision": 0.6239,
+    "recall": 0.3476,
+    "mAP50": 0.3288,
+    "mAP50_95": 0.1027
+  },
+  "test_metrics": {
+    "precision": 0.7658,
+    "recall": 0.6242,
+    "mAP50": 0.6352,
+    "mAP50_95": 0.2181
+  },
+  "inshore_subset": {
+    "image_count": 766,
+    "candidates_conf_01": 9881,
+    "detections_conf_25": 397,
+    "detections_conf_50": 10,
+    "latency_ms_per_img": 112.26,
+    "max_conf": 0.5576,
+    "median_conf": 0.0238,
+    "mean_conf": 0.0528
+  },
+  "offshore_subset": {
+    "image_count": 1000,
+    "candidates_conf_01": 5914,
+    "detections_conf_25": 831,
+    "detections_conf_50": 13,
+    "latency_ms_per_img": 143.78,
+    "max_conf": 0.5668,
+    "median_conf": 0.0451,
+    "mean_conf": 0.1001
+  },
+  "test_confidence_distribution": {
+    "max_confidence": 0.5807,
+    "median_confidence": 0.0438,
+    "mean_confidence": 0.1036,
+    "detections_conf_25": 1993,
+    "detections_conf_50": 38,
+    "latency_ms_per_640chip": 121.46
+  }
+}

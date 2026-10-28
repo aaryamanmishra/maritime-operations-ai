@@ -1,0 +1,14 @@
+Software Layer,Technology / Package,Version,License,Operational Role in System
+Host Operating System,Microsoft Windows 11 Pro / WSL2,Build 22631,Commercial,Primary development host and Docker execution engine
+Container Runtime,Docker Desktop / Docker Engine,27.0+ (Linux Alpine Base),Apache 2.0,"Isolated deployment of backend, worker, frontend, db, and cache"
+Backend Runtime,Python,3.12.15,PSF,"Asynchronous application runtime, ML pipeline, and geospatial math"
+API Web Framework,FastAPI,0.115.0,MIT,High-performance async RESTful API and WebSocket endpoint orchestration
+ASGI Server,Uvicorn (Standard),0.31.0,BSD-3-Clause,Production ASGI server with uvloop and httptools
+Spatial Relational DB,PostgreSQL + PostGIS,16-3.4 (Alpine),PostgreSQL / GPL-2,"Spatial GIST indexing, ST_DWithin geospatial distance matching"
+In-Memory Cache,Redis,7.0 (Alpine),BSD-3-Clause,High-speed vessel coordinate caching (GEOADD) and live pub/sub
+Object Detection ML,Ultralytics YOLO,8.3.0+,AGPL-3.0,"YOLO11n, YOLO11s, YOLOv8s ship detection architectures"
+Deep Learning Engine,PyTorch,2.2.0+ / 2.14.0,Modified BSD,"GPU tensor calculations, mixed precision (AMP), and neural forward pass"
+Frontend UI Framework,React + TypeScript,19.0.0 / 5.7.2,MIT,Interactive tactical surveillance client and component state management
+Build Tooling,Vite,6.1.0,MIT,Fast frontend hot module replacement and optimized production bundle
+Geospatial Map Rendering,MapLibre GL,6.11.2,BSD-3-Clause,Hardware-accelerated vector rendering of maritime maps and SAR overlays
+Data Manipulation,NumPy & Pandas,2.4.6 / 3.0.6,BSD-3-Clause,"Fast matrix normalization, percentile filtering, and test metrics audit"

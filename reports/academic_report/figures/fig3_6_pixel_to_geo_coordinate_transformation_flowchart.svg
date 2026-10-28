@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="400.0" y="30" class="title">Fig 3.6: GCP-Based Piecewise Bilinear Georeferencing Flowchart</text>
+  
+  <defs>
+    <marker id="arr6" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect x="250" y="50" width="300" height="40" class="box-rect" />
+  <text x="400" y="75" class="box-title">BBox Center Pixel (X = x + x_off, Y = y + y_off)</text>
+
+  <line x1="400" y1="90" x2="400" y2="125" class="edge-line" marker-end="url(#arr6)" />
+
+  <rect x="220" y="125" width="360" height="45" class="box-rect" />
+  <text x="400" y="145" class="box-title">Bisection Line Search in GCP Grid</text>
+  <text x="400" y="160" class="box-text">Find bounding lines [L0, L1] enclosing target line Y</text>
+
+  <line x1="400" y1="170" x2="400" y2="205" class="edge-line" marker-end="url(#arr6)" />
+
+  <rect x="220" y="205" width="360" height="45" class="box-rect" />
+  <text x="400" y="225" class="box-title">Bisection Pixel Search along Lines</text>
+  <text x="400" y="240" class="box-text">Find bounding columns [P0, P1] enclosing target pixel X</text>
+
+  <line x1="400" y1="250" x2="400" y2="285" class="edge-line" marker-end="url(#arr6)" />
+
+  <rect x="200" y="285" width="400" height="50" fill="#eff6ff" stroke="#2563eb" stroke-width="2" rx="6" />
+  <text x="400" y="307" class="box-title">Piecewise Bilinear Geodesic Interpolation</text>
+  <text x="400" y="323" class="box-text">u = (X - P0)/(P1 - P0), v = (Y - L0)/(L1 - L0) -&gt; Lon, Lat</text>
+
+  <line x1="400" y1="335" x2="400" y2="370" class="edge-line" marker-end="url(#arr6)" />
+
+  <rect x="220" y="370" width="360" height="45" class="box-rect" />
+  <text x="400" y="390" class="box-title">Antimeridian Normalization &amp; Invariants</text>
+  <text x="400" y="405" class="box-text">Lon in [-180, 180), Lat in [-90, 90], finite checks</text>
+
+  <line x1="400" y1="415" x2="400" y2="450" class="edge-line" marker-end="url(#arr6)" />
+
+  <rect x="220" y="450" width="360" height="40" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" rx="6" />
+  <text x="400" y="475" class="box-title">Validated GeoPoint (WGS84 EPSG:4326)</text>
+
+</svg>

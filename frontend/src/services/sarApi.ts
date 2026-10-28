@@ -33,7 +33,14 @@ export interface SARSceneSummary {
   scene_metadata?: Record<string, any>;
 }
 
-export type MatchStatus = "AIS-MATCHED" | "AIS-UNMATCHED" | "AIS COMPARISON UNAVAILABLE";
+export type MatchStatus =
+  | "AIS-MATCHED"
+  | "AIS-UNMATCHED"
+  | "AIS COMPARISON UNAVAILABLE"
+  | "DARK-VESSEL-CANDIDATE"
+  | "AIS-UNMATCHED-INSUFFICIENT-COVERAGE"
+  | "AIS-COMPARISON-UNAVAILABLE"
+  | "DETECTION-REVIEW-REQUIRED";
 
 export interface SARDetectionItem {
   detection_id: string;

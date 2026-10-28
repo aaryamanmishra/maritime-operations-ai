@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 390" width="800" height="390">
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+    .box-rect { fill: #f8fafc; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+    .box-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #1e3a8a; text-anchor: middle; }
+    .box-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #334155; text-anchor: middle; }
+    .edge-line { stroke: #2563eb; stroke-width: 2; fill: none; }
+    .edge-dash { stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <text x="400.0" y="30" class="title">Fig 3.12: Tactical Control Panel and REST API Interaction Sequence</text>
+  
+  <defs>
+    <marker id="arr12" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <!-- Lifelines -->
+  <line x1="100" y1="80" x2="100" y2="360" class="edge-dash" />
+  <line x1="300" y1="80" x2="300" y2="360" class="edge-dash" />
+  <line x1="500" y1="80" x2="500" y2="360" class="edge-dash" />
+  <line x1="700" y1="80" x2="700" y2="360" class="edge-dash" />
+
+  <!-- Headers -->
+  <rect x="30" y="50" width="140" height="30" fill="#f1f5f9" stroke="#334155" rx="4" />
+  <text x="100" y="70" class="box-title">MaritimeMap.tsx</text>
+
+  <rect x="220" y="50" width="160" height="30" fill="#eff6ff" stroke="#2563eb" rx="4" />
+  <text x="300" y="70" class="box-title">DarkVesselControlPanel</text>
+
+  <rect x="430" y="50" width="140" height="30" fill="#fdf4ff" stroke="#a855f7" rx="4" />
+  <text x="500" y="70" class="box-title">sarApi.ts Client</text>
+
+  <rect x="630" y="50" width="140" height="30" fill="#f0fdf4" stroke="#16a34a" rx="4" />
+  <text x="700" y="70" class="box-title">FastAPI Backend</text>
+
+  <!-- Sequence lines -->
+  <line x1="100" y1="110" x2="300" y2="110" class="edge-line" marker-end="url(#arr12)" />
+  <text x="200" y="105" class="box-text">1. BBox Selected on Map</text>
+
+  <line x1="300" y1="140" x2="500" y2="140" class="edge-line" marker-end="url(#arr12)" />
+  <text x="400" y="135" class="box-text">2. searchSARScenes()</text>
+
+  <line x1="500" y1="170" x2="700" y2="170" class="edge-line" marker-end="url(#arr12)" />
+  <text x="600" y="165" class="box-text">3. POST /api/v1/sar/search</text>
+
+  <line x1="700" y1="200" x2="300" y2="200" class="edge-line" stroke-dasharray="4" marker-end="url(#arr12)" />
+  <text x="500" y="195" class="box-text">4. Display Available Scenes</text>
+
+  <line x1="300" y1="230" x2="700" y2="230" class="edge-line" marker-end="url(#arr12)" />
+  <text x="500" y="225" class="box-text">5. POST /api/v1/sar/jobs (start analysis)</text>
+
+  <line x1="500" y1="260" x2="700" y2="260" class="edge-line" marker-end="url(#arr12)" />
+  <text x="600" y="255" class="box-text">6. Poll GET /jobs/{id}</text>
+
+  <line x1="700" y1="290" x2="500" y2="290" class="edge-line" stroke-dasharray="4" marker-end="url(#arr12)" />
+  <text x="600" y="285" class="box-text">7. Job Status: COMPLETED</text>
+
+  <line x1="500" y1="320" x2="700" y2="320" class="edge-line" marker-end="url(#arr12)" />
+  <text x="600" y="315" class="box-text">8. GET /scenes/{id}/detections</text>
+
+  <line x1="700" y1="345" x2="100" y2="345" class="edge-line" stroke-dasharray="4" marker-end="url(#arr12)" />
+  <text x="400" y="340" class="box-text">9. Render Overlays &amp; Provenance on Map</text>
+
+</svg>

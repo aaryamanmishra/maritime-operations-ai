@@ -1,0 +1,8 @@
+Feature / Dimension,Existing Commercial / Academic Systems,Proposed Maritime Operations AI System,Demonstrated Advantage
+Primary Sensor Dependency,AIS-only or Optical Satellite,Fused Sentinel-1 C-Band SAR + AIS,"All-weather, day-and-night penetration through clouds, fog, and darkness"
+Dark-Vessel Identification,Manual radar watch or binary thresholding,Kinematic uncertainty-aware Gaussian matching,Eliminates false alarms from GPS latency and high vessel speed
+SAR Image Resolution,Downsampled full scenes (loss of small targets),Native-resolution sliding-window tiler (640x640),Detects small fishing vessels and skiffs down to 10-15m length
+SAR Modality Handling,Single generic model (often failing on GRD),Dedicated dual-modality: GRD (Production) & SLC (Opt-in),Prevents confidence collapse caused by speckle and pixel aspect ratio shift
+Operational Ethics,Aggressively labels targets as 'illegal/pirate',Strict classification: 'AIS-UNMATCHED / Candidate',Preserves legal integrity and prevents unwarranted interdiction alerts
+Sensor Blindspot Handling,Assumes dark vessel if AIS missing,Sector coverage audit (35km radius check),Distinguishes actual non-reporting vessels from shore receiver blindspots
+Software Architecture,Monolithic desktop GIS (e.g. SNAP),"Cloud-native microservices (FastAPI, PostGIS, React)","Asynchronous, scalable, API-driven, with live map dashboard"
