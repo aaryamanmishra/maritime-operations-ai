@@ -7,7 +7,7 @@ antimeridian crossing normalization, and geodesic error calculation for the mari
 
 import math
 from dataclasses import dataclass
-from typing import Any, Tuple, Union
+from typing import Tuple
 
 
 class CoordinateValidationError(ValueError):

@@ -3,7 +3,6 @@ Automated Test Suite for Kinematic Uncertainty-Aware AIS-SAR Correlation,
 Soft-Edge Decision Boundaries, and Dark-Vessel Semantics.
 """
 
-import math
 from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import AsyncMock, MagicMock

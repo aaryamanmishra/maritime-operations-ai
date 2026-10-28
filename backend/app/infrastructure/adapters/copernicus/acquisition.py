@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import json
 import time
 from pathlib import Path
@@ -789,7 +790,7 @@ except Exception as e:
         import subprocess
         import numpy as np
         from PIL import Image
-        from app.infrastructure.adapters.copernicus.preprocessing import SARTile, SARPreprocessor
+        from app.infrastructure.adapters.copernicus.preprocessing import SARPreprocessor
 
         clean_id = scene_id.replace(" ", "_").replace(".SAFE", "") if scene_id else "grd_default"
         target_path = Path(target_dir) / clean_id

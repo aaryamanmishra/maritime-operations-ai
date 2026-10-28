@@ -1,17 +1,14 @@
 import logging
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.sar_intelligence.coordinates import (
-    GeoPoint,
     dead_reckon_position,
     haversine_distance_m,
-    interpolate_position,
-    normalize_longitude,
 )
 from app.domain.sar_intelligence.models import MatchStatus
 

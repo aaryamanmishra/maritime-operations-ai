@@ -5,7 +5,6 @@ Validation, Antimeridian Crossing, and Georeferencing Accuracy.
 
 import math
 import pytest
-import numpy as np
 
 from app.domain.sar_intelligence.coordinates import (
     CoordinateValidationError,
@@ -17,7 +16,6 @@ from app.domain.sar_intelligence.coordinates import (
     normalize_longitude,
 )
 from app.infrastructure.adapters.copernicus.georeference import SARGeoreferencer
-from app.infrastructure.adapters.copernicus.preprocessing import SARTile, SARPreprocessor
 
 
 def test_valid_geopoint_and_conversions():
@@ -144,12 +142,6 @@ def test_real_sentinel1_reference_points_error_budget():
         {"pixel": 10000.0, "line": 10000.0, "longitude": 0.0, "latitude": 49.0, "height": 0.0},
         {"pixel": 5000.0, "line": 5000.0, "longitude": -1.0, "latitude": 50.0, "height": 0.0},
     ]
-
-    scene_meta = {
-        "original_width": 10000,
-        "original_height": 10000,
-        "geolocation_grid_points": gcps,
-    }
 
     # Test GCP reference accuracy
     errors_m = []

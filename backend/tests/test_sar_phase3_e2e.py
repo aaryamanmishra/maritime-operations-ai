@@ -1,21 +1,16 @@
 import pytest
-from datetime import datetime, timezone, timedelta
-from typing import Any
+from datetime import datetime, timezone
 from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.domain.sar_intelligence.models import (
     MatchStatus,
-    GeographicContextStatus,
-    SARDetectionItem,
     SARJobResponse,
     SARJobStatus,
     SARModality,
 )
 from app.domain.sar_intelligence.correlation import AISSARCorrelationEngine
 from app.domain.sar_intelligence.service import SARAnalysisService
-from app.infrastructure.database.session import async_session_factory
-from sqlalchemy import text
 
 
 @pytest.mark.asyncio

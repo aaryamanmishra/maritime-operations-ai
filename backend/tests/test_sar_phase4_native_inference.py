@@ -1,11 +1,7 @@
-import math
 import numpy as np
-import pytest
 from app.domain.sar_intelligence.inference import (
     YOLO26sVesselDetector,
-    deduplicate_scene_detections,
 )
-from app.infrastructure.adapters.copernicus.georeference import SARGeoreferencer
 from app.infrastructure.adapters.copernicus.preprocessing import SARTile, SARPreprocessor
 
 
