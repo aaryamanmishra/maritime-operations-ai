@@ -437,4 +437,4 @@ In compliance with international maritime intelligence standards:
 
 This project was developed for the **Deep Learning (CI3201)** course curriculum at **Vishwakarma Institute of Technology, Pune (2025–2026)**.
 
-The codebase is released under the **MIT License**. Synthetic Aperture Radar data is provided courtesy of the **European Space Agency (ESA)** and the **European Commission Copernicus Programme**. Terrestrial and satellite AIS telemetry is provided through the **AISStream.io** community network.
+No `LICENSE` file is currently included in this repository, so the code does not currently have an explicit open-source reuse license. Synthetic Aperture Radar data is provided courtesy of the **European Space Agency (ESA)** and the **European Commission Copernicus Programme**. Terrestrial and satellite AIS telemetry is provided through the **AISStream.io** community network.
